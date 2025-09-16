@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useTripContext } from '../contexts/TripContext';
 import { useMedicationContext } from '../contexts/MedicationContext';
+import { useCurrencyContext } from '../contexts/CurrencyContext';
 import { authService } from '../services/authService';
 import { formatCurrency, getBalanceColor } from '../utils/currencyUtils';
 import { formatDate, getRelativeTime } from '../utils/dateUtils';
@@ -35,6 +36,8 @@ const HomeScreen = ({ navigation }) => {
     activeMedications, 
     loading: medicationLoading 
   } = useMedicationContext();
+  
+  const { formatCurrency: formatCurrencyValue } = useCurrencyContext();
 
   // Get active trip and related data
   const activeTrip = getActiveTrip();
@@ -106,12 +109,10 @@ const HomeScreen = ({ navigation }) => {
                 </Paragraph>
               </View>
               <IconButton
-                icon="cog"
+                icon="currency-usd"
                 size={24}
-                onPress={() => {
-                  // TODO: Navigate to settings
-                  Alert.alert('Em Breve', 'Configurações serão implementadas em breve!');
-                }}
+                onPress={() => navigation.navigate('CurrencySettings')}
+                tooltip="Configurações de Moeda"
               />
             </View>
           </Card.Content>
@@ -142,7 +143,7 @@ const HomeScreen = ({ navigation }) => {
                     styles.balanceValue, 
                     { color: getBalanceColor(realBalance) }
                   ]}>
-                    {formatCurrency(realBalance)}
+                    {formatCurrencyValue(realBalance, activeTrip?.defaultCurrency || 'USD')}
                   </Text>
                 </View>
                 
@@ -152,7 +153,7 @@ const HomeScreen = ({ navigation }) => {
                     styles.balanceValue, 
                     { color: getBalanceColor(realBalance) }
                   ]}>
-                    {formatCurrency(realBalance)}
+                    {formatCurrencyValue(realBalance, activeTrip?.defaultCurrency || 'USD')}
                   </Text>
                 </View>
               </View>
@@ -211,7 +212,7 @@ const HomeScreen = ({ navigation }) => {
                     styles.transactionAmount,
                     { color: transaction.type === 'income' ? '#4CAF50' : '#F44336' }
                   ]}>
-                    {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.amount)}
+                    {transaction.type === 'income' ? '+' : '-'} {formatCurrencyValue(transaction.amount, transaction.currency || activeTrip?.defaultCurrency || 'USD')}
                   </Text>
                 </View>
               ))}

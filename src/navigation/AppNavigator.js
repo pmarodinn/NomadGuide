@@ -17,6 +17,7 @@ import RecurrenceScreen from '../screens/RecurrenceScreen';
 import MedicationListScreen from '../screens/MedicationListScreen';
 import AddMedicationScreen from '../screens/AddMedicationScreen';
 import DailySpendingScreen from '../screens/DailySpendingScreen';
+import CurrencySettingsScreen from '../screens/CurrencySettingsScreen';
 
 
 const Stack = createStackNavigator();
@@ -151,6 +152,14 @@ const AppNavigator = () => {
           component={DailySpendingScreen}
           options={{
             title: 'Gastos Diários',
+          }}
+        />
+        
+        <Stack.Screen 
+          name="CurrencySettings" 
+          component={CurrencySettingsScreen}
+          options={{
+            title: 'Configurações de Moeda',
           }}
         />
         

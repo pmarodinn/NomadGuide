@@ -1,131 +1,200 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { db } from '../config/firebaseConfig';
 import { useAuth } from './AuthContext';
-import { calculateRealBalance, calculateProjectedBalance } from '../utils/balanceUtils';
+import {
+  subscribeToTrips,
+  subscribeToTransactions,
+  subscribeToCategories,
+  createTrip as createTripService,
+  updateTrip as updateTripService,
+  deleteTrip as deleteTripService,
+  activateTrip as activateTripService,
+  addTransaction as addTransactionService,
+  updateTransaction as updateTransactionService,
+  deleteTransaction as deleteTransactionService,
+  initializeDefaultCategories
+} from '../services/tripService';
 
 const TripContext = createContext({});
 
-export const useTrip = () => {
+export const useTripContext = () => {
   const context = useContext(TripContext);
   if (!context) {
-    throw new Error('useTrip must be used within a TripProvider');
+    throw new Error('useTripContext must be used within a TripProvider');
   }
   return context;
 };
 
+// Backward compatibility
+export const useTrip = useTripContext;
+
 export const TripProvider = ({ children }) => {
   const { userId } = useAuth();
   const [trips, setTrips] = useState([]);
-  const [activeTrip, setActiveTrip] = useState(null);
   const [transactions, setTransactions] = useState([]);
-  const [recurrences, setRecurrences] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
+
+  // Initialize default categories for new users
+  useEffect(() => {
+    if (!userId || initialized) return;
+
+    const initializeUser = async () => {
+      try {
+        // Check if user already has categories
+        const unsubscribe = subscribeToCategories(userId, (categoriesData) => {
+          if (categoriesData.length === 0) {
+            // User has no categories, initialize defaults
+            initializeDefaultCategories(userId).catch(console.error);
+          }
+          setCategories(categoriesData);
+          unsubscribe(); // Unsubscribe after first check
+        });
+        
+        setInitialized(true);
+      } catch (error) {
+        console.error('Error initializing user:', error);
+        setInitialized(true);
+      }
+    };
+
+    initializeUser();
+  }, [userId, initialized]);
 
   // Listen to trips
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setTrips([]);
+      return;
+    }
 
-    const tripsRef = collection(db, 'users', userId, 'trips');
-    const q = query(tripsRef, orderBy('createdAt', 'desc'));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const tripsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
+    const unsubscribe = subscribeToTrips(userId, (tripsData) => {
       setTrips(tripsData);
-      
-      // Find active trip
-      const active = tripsData.find(trip => trip.isActive);
-      setActiveTrip(active || null);
-      
       setLoading(false);
     });
 
     return unsubscribe;
   }, [userId]);
 
-  // Listen to transactions for active trip
+  // Listen to transactions
   useEffect(() => {
-    if (!userId || !activeTrip) {
+    if (!userId) {
       setTransactions([]);
       return;
     }
 
-    const transactionsRef = collection(db, 'users', userId, 'transactions');
-    const q = query(
-      transactionsRef, 
-      where('tripId', '==', activeTrip.id),
-      orderBy('date', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const transactionsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+    const unsubscribe = subscribeToTransactions(userId, (transactionsData) => {
       setTransactions(transactionsData);
     });
 
     return unsubscribe;
-  }, [userId, activeTrip]);
+  }, [userId]);
 
-  // Listen to recurrences for active trip
+  // Listen to categories
   useEffect(() => {
-    if (!userId || !activeTrip) {
-      setRecurrences([]);
-      return;
-    }
+    if (!userId || !initialized) return;
 
-    const recurrencesRef = collection(db, 'users', userId, 'recurrences');
-    const q = query(
-      recurrencesRef, 
-      where('tripId', '==', activeTrip.id),
-      where('isActive', '==', true)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const recurrencesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setRecurrences(recurrencesData);
+    const unsubscribe = subscribeToCategories(userId, (categoriesData) => {
+      setCategories(categoriesData);
     });
 
     return unsubscribe;
-  }, [userId, activeTrip]);
+  }, [userId, initialized]);
 
-  // Calculate balances
-  const realBalance = useCallback(() => {
-    if (!activeTrip) return 0;
-    return calculateRealBalance(activeTrip, transactions);
-  }, [activeTrip, transactions]);
+  // Trip management functions
+  const createTrip = useCallback(async (tripData) => {
+    if (!userId) throw new Error('User not authenticated');
+    return await createTripService(userId, tripData);
+  }, [userId]);
 
-  const projectedBalance = useCallback(() => {
-    if (!activeTrip) return 0;
-    return calculateProjectedBalance(activeTrip, transactions, recurrences);
-  }, [activeTrip, transactions, recurrences]);
+  const updateTrip = useCallback(async (tripId, updates) => {
+    return await updateTripService(tripId, updates);
+  }, []);
+
+  const deleteTrip = useCallback(async (tripId) => {
+    return await deleteTripService(tripId);
+  }, []);
+
+  const activateTrip = useCallback(async (tripId) => {
+    if (!userId) throw new Error('User not authenticated');
+    return await activateTripService(tripId, userId);
+  }, [userId]);
+
+  // Transaction management functions
+  const addTransaction = useCallback(async (transactionData) => {
+    if (!userId) throw new Error('User not authenticated');
+    return await addTransactionService(userId, transactionData);
+  }, [userId]);
+
+  const updateTransaction = useCallback(async (transactionId, updates) => {
+    return await updateTransactionService(transactionId, updates);
+  }, []);
+
+  const deleteTransaction = useCallback(async (transactionId) => {
+    return await deleteTransactionService(transactionId);
+  }, []);
+
+  // Helper functions
+  const getActiveTrip = useCallback(() => {
+    return trips.find(trip => trip.isActive) || null;
+  }, [trips]);
+
+  const getTripTransactions = useCallback((tripId) => {
+    return transactions.filter(transaction => transaction.tripId === tripId);
+  }, [transactions]);
+
+  const getTripBalance = useCallback((tripId) => {
+    const tripTransactions = getTripTransactions(tripId);
+    const trip = trips.find(t => t.id === tripId);
+    
+    if (!trip) return 0;
+    
+    const totalSpent = tripTransactions.reduce((sum, transaction) => {
+      if (transaction.type === 'expense') {
+        return sum + (transaction.amount || 0);
+      } else if (transaction.type === 'income') {
+        return sum - (transaction.amount || 0);
+      }
+      return sum;
+    }, 0);
+    
+    return (trip.budget || 0) - totalSpent;
+  }, [trips, transactions, getTripTransactions]);
+
+  const getTripByCategory = useCallback((tripId, categoryId) => {
+    return transactions.filter(transaction => 
+      transaction.tripId === tripId && transaction.categoryId === categoryId
+    );
+  }, [transactions]);
+
+  const getCategoryById = useCallback((categoryId) => {
+    return categories.find(category => category.id === categoryId);
+  }, [categories]);
 
   const value = {
     // Data
     trips,
-    activeTrip,
     transactions,
-    recurrences,
+    categories,
     loading,
     
-    // Calculated values
-    realBalance: realBalance(),
-    projectedBalance: projectedBalance(),
-    
     // Helper functions
-    refreshData: () => {
-      // This will be called to trigger recalculations
-      setLoading(true);
-      setTimeout(() => setLoading(false), 100);
-    }
+    getActiveTrip,
+    getTripTransactions,
+    getTripBalance,
+    getTripByCategory,
+    getCategoryById,
+    
+    // Trip management
+    createTrip,
+    updateTrip,
+    deleteTrip,
+    activateTrip,
+    
+    // Transaction management
+    addTransaction,
+    updateTransaction,
+    deleteTransaction,
   };
 
   return (

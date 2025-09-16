@@ -1,5 +1,33 @@
 # 🔥 Configuração do Firebase
 
+## 🚨 URGENTE: Firestore Indexes Necessários
+
+**O app não funcionará sem estes índices. Clique nos links abaixo para criá-los:**
+
+### 1. Categories Index
+- Collection: `categories`
+- Fields: `userId` (Ascending), `name` (Ascending)
+- **👉 [CRIAR AGORA](https://console.firebase.google.com/v1/r/project/nomadguide-5ea09/firestore/indexes?create_composite=ClNwcm9qZWN0cy9ub21hZGd1aWRlLTVlYTA5L2RhdGFiYXNlcy8oZGVmYXVsdCkvY29sbGVjdGlvbkdyb3Vwcy9jYXRlZ29yaWVzL2luZGV4ZXMvXxABGgoKBnVzZXJJZRABGggKBG5hbWUQARoMCghfX25hbWVfXxAB)**
+
+### 2. Trips Index  
+- Collection: `trips`
+- Fields: `userId` (Ascending), `createdAt` (Descending)
+- **👉 [CRIAR AGORA](https://console.firebase.google.com/v1/r/project/nomadguide-5ea09/firestore/indexes?create_composite=Ck5wcm9qZWN0cy9ub21hZGd1aWRlLTVlYTA5L2RhdGFiYXNlcy8oZGVmYXVsdCkvY29sbGVjdGlvbkdyb3Vwcy90cmlwcy9pbmRleGVzL18QARoKCgZ1c2VySWQQARoNCgljcmVhdGVkQXQQAhoMCghfX25hbWVfXxAC)**
+
+### 3. Transactions Index
+- Collection: `transactions`  
+- Fields: `userId` (Ascending), `date` (Descending)
+- **👉 [CRIAR AGORA](https://console.firebase.google.com/v1/r/project/nomadguide-5ea09/firestore/indexes?create_composite=ClVwcm9qZWN0cy9ub21hZGd1aWRlLTVlYTA5L2RhdGFiYXNlcy8oZGVmYXVsdCkvY29sbGVjdGlvbkdyb3Vwcy90cmFuc2FjdGlvbnMvaW5kZXhlcy9fEAEaCgoGdXNlcklkEAEaCAoEZGF0ZRACGgwKCF9fbmFtZV9fEAI)**
+
+### 4. Medications Index
+- Collection: `medications`
+- Fields: `userId` (Ascending), `name` (Ascending)
+
+**Depois de criar os índices:**
+1. Aguarde alguns minutos para que sejam construídos
+2. Atualize as regras do Firestore (copie de `firestore_rules.txt`)
+3. Reinicie o app
+
 ## Passos para configurar o Firebase:
 
 ### 1. Criar projeto no Firebase Console

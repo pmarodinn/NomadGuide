@@ -11,8 +11,9 @@ import {
   IconButton
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
-import { useTrip } from '../contexts/TripContext';
-import { useMedication } from '../contexts/MedicationContext';
+import { useTripContext } from '../contexts/TripContext';
+import { useMedicationContext } from '../contexts/MedicationContext';
+import { authService } from '../services/authService';
 import { formatCurrency, getBalanceColor } from '../utils/currencyUtils';
 import { formatDate, getRelativeTime } from '../utils/dateUtils';
 import { requestNotificationPermissions } from '../services/notifications';
@@ -23,17 +24,23 @@ const HomeScreen = ({ navigation }) => {
   const theme = useTheme();
   const { user, loading: authLoading } = useAuth();
   const { 
-    activeTrip, 
-    realBalance, 
-    projectedBalance, 
+    trips,
     transactions, 
+    getActiveTrip,
+    getTripBalance,
     loading: tripLoading 
-  } = useTrip();
+  } = useTripContext();
   const { 
     medicationsDueSoon, 
     activeMedications, 
     loading: medicationLoading 
-  } = useMedication();
+  } = useMedicationContext();
+
+  // Get active trip and related data
+  const activeTrip = getActiveTrip();
+  const realBalance = activeTrip ? getTripBalance(activeTrip.id) : 0;
+  const activeTripTransactions = activeTrip ? transactions.filter(t => t.tripId === activeTrip.id) : [];
+  const recentTransactions = activeTripTransactions.slice(0, 3);
 
   // Request notification permissions on first load
   useEffect(() => {
@@ -45,8 +52,6 @@ const HomeScreen = ({ navigation }) => {
   }
 
   const loading = tripLoading || medicationLoading;
-
-  const recentTransactions = transactions.slice(0, 3);
 
   const handleQuickAddExpense = () => {
     if (!activeTrip) {
@@ -145,9 +150,9 @@ const HomeScreen = ({ navigation }) => {
                   <Text style={styles.balanceLabel}>Saldo Projetado</Text>
                   <Text style={[
                     styles.balanceValue, 
-                    { color: getBalanceColor(projectedBalance) }
+                    { color: getBalanceColor(realBalance) }
                   ]}>
-                    {formatCurrency(projectedBalance)}
+                    {formatCurrency(realBalance)}
                   </Text>
                 </View>
               </View>

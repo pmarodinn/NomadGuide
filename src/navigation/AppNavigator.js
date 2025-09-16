@@ -1,9 +1,14 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { useTheme } from 'react-native-paper';
+import { useTheme, IconButton } from 'react-native-paper';
+import { useAuth } from '../contexts/AuthContext';
+import { authService } from '../services/authService';
 
-// Import screens
+// Screens
+import LoadingScreen from '../components/ui/LoadingScreen';
+import LoginScreen from '../screens/LoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
 import HomeScreen from '../screens/HomeScreen';
 import TripListScreen from '../screens/TripListScreen';
 import TripDetailScreen from '../screens/TripDetailScreen';
@@ -13,9 +18,11 @@ import MedicationListScreen from '../screens/MedicationListScreen';
 import AddMedicationScreen from '../screens/AddMedicationScreen';
 import DailySpendingScreen from '../screens/DailySpendingScreen';
 
+
 const Stack = createStackNavigator();
 
 const AppNavigator = () => {
+  const { user, loading } = useAuth();
   const theme = useTheme();
 
   const screenOptions = {
@@ -27,6 +34,38 @@ const AppNavigator = () => {
       fontWeight: 'bold',
     },
   };
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  // Show auth screens if user is not logged in
+  if (!user) {
+    return (
+      <NavigationContainer>
+        <Stack.Navigator 
+          initialRouteName="Login"
+          screenOptions={screenOptions}
+        >
+          <Stack.Screen 
+            name="Login" 
+            component={LoginScreen}
+            options={{ 
+              title: '🔐 Login',
+              headerShown: false 
+            }}
+          />
+          <Stack.Screen 
+            name="Register" 
+            component={RegisterScreen}
+            options={{ 
+              title: '📝 Cadastro'
+            }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    );
+  }
 
   return (
     <NavigationContainer>
@@ -42,6 +81,18 @@ const AppNavigator = () => {
             headerStyle: {
               backgroundColor: theme.colors.primary,
             },
+            headerRight: () => (
+              <IconButton
+                icon="logout"
+                iconColor={theme.colors.onPrimary}
+                onPress={async () => {
+                  const result = await authService.logout();
+                  if (result.success) {
+                    // AuthContext vai detectar e navegar para login
+                  }
+                }}
+              />
+            ),
           }}
         />
         
@@ -102,6 +153,8 @@ const AppNavigator = () => {
             title: 'Gastos Diários',
           }}
         />
+        
+
       </Stack.Navigator>
     </NavigationContainer>
   );

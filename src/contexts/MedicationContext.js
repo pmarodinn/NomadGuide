@@ -1,0 +1,71 @@
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
+import { db } from '../config/firebaseConfig';
+import { useAuth } from './AuthContext';
+
+const MedicationContext = createContext({});
+
+export const useMedication = () => {
+  const context = useContext(MedicationContext);
+  if (!context) {
+    throw new Error('useMedication must be used within a MedicationProvider');
+  }
+  return context;
+};
+
+export const MedicationProvider = ({ children }) => {
+  const { userId } = useAuth();
+  const [medications, setMedications] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Listen to medications
+  useEffect(() => {
+    if (!userId) return;
+
+    const medicationsRef = collection(db, 'users', userId, 'medications');
+    const q = query(medicationsRef, orderBy('name'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const medicationsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      setMedications(medicationsData);
+      setLoading(false);
+    });
+
+    return unsubscribe;
+  }, [userId]);
+
+  // Get active medications (with notifications enabled)
+  const activeMedications = medications.filter(med => med.isActive);
+
+  // Get medications due soon (next 2 hours)
+  const medicationsDueSoon = activeMedications.filter(med => {
+    if (!med.nextAlarm) return false;
+    const nextAlarm = med.nextAlarm.toDate ? med.nextAlarm.toDate() : new Date(med.nextAlarm);
+    const now = new Date();
+    const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    return nextAlarm <= twoHoursFromNow && nextAlarm > now;
+  });
+
+  const value = {
+    medications,
+    activeMedications,
+    medicationsDueSoon,
+    loading,
+    
+    // Helper functions
+    refreshData: () => {
+      setLoading(true);
+      setTimeout(() => setLoading(false), 100);
+    }
+  };
+
+  return (
+    <MedicationContext.Provider value={value}>
+      {children}
+    </MedicationContext.Provider>
+  );
+};

@@ -11,27 +11,38 @@ import {
   Divider,
   Snackbar,
   Text,
-  Chip
+  Chip,
+  Menu
 } from 'react-native-paper';
 import { useTripContext } from '../contexts/TripContext';
+import { useCurrencyContext } from '../contexts/CurrencyContext';
 
 const AddTransactionScreen = ({ navigation, route }) => {
   const { tripId } = route.params || {};
   const { categories, addTransaction, trips } = useTripContext();
+  const { getSupportedCurrencies, formatCurrency: formatCurrencyValue, convertCurrency } = useCurrencyContext();
   
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState('expense');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [selectedCurrency, setSelectedCurrency] = useState('USD');
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [trip, setTrip] = useState(null);
+  const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
+  const [convertedAmount, setConvertedAmount] = useState(null);
 
   useEffect(() => {
     if (tripId && trips) {
       const currentTrip = trips.find(t => t.id === tripId);
       setTrip(currentTrip);
+      
+      // Set trip's default currency
+      if (currentTrip?.defaultCurrency) {
+        setSelectedCurrency(currentTrip.defaultCurrency);
+      }
     }
     
     // Set first category as default if available
@@ -39,6 +50,30 @@ const AddTransactionScreen = ({ navigation, route }) => {
       setSelectedCategoryId(categories[0].id);
     }
   }, [tripId, trips, categories]);
+
+  // Calculate converted amount when amount or currency changes
+  useEffect(() => {
+    const calculateConversion = async () => {
+      if (amount && selectedCurrency && trip?.defaultCurrency && selectedCurrency !== trip.defaultCurrency) {
+        try {
+          const numAmount = parseFloat(amount.replace(',', '.'));
+          if (!isNaN(numAmount) && numAmount > 0) {
+            const converted = await convertCurrency(numAmount, selectedCurrency, trip.defaultCurrency);
+            setConvertedAmount(converted);
+          } else {
+            setConvertedAmount(null);
+          }
+        } catch (error) {
+          console.error('Error converting currency:', error);
+          setConvertedAmount(null);
+        }
+      } else {
+        setConvertedAmount(null);
+      }
+    };
+
+    calculateConversion();
+  }, [amount, selectedCurrency, trip?.defaultCurrency, convertCurrency]);
 
   const handleSubmit = async () => {
     // Validation
@@ -75,6 +110,7 @@ const AddTransactionScreen = ({ navigation, route }) => {
         description: description.trim(),
         type,
         categoryId: selectedCategoryId,
+        currency: selectedCurrency,
         date: new Date(),
       };
 
@@ -141,7 +177,7 @@ const AddTransactionScreen = ({ navigation, route }) => {
           <Divider style={styles.divider} />
 
           <TextInput
-            label="💰 Valor (R$)"
+            label="💰 Valor"
             value={amount}
             onChangeText={setAmount}
             keyboardType="decimal-pad"
@@ -151,11 +187,55 @@ const AddTransactionScreen = ({ navigation, route }) => {
             right={
               amount ? (
                 <TextInput.Affix 
-                  text={formatCurrency(parseFloat(amount) || 0)} 
+                  text={formatCurrencyValue(parseFloat(amount) || 0, selectedCurrency)} 
                 />
               ) : null
             }
           />
+
+          <View style={styles.currencyContainer}>
+            <Menu
+              visible={showCurrencyMenu}
+              onDismiss={() => setShowCurrencyMenu(false)}
+              anchor={
+                <Button
+                  mode="outlined"
+                  onPress={() => setShowCurrencyMenu(true)}
+                  style={styles.currencyButton}
+                  contentStyle={styles.currencyButtonContent}
+                  icon="currency-usd"
+                >
+                  {(() => {
+                    const currency = getSupportedCurrencies().find(c => c.code === selectedCurrency);
+                    return `${currency?.flag || ''} ${currency?.code || 'USD'}`;
+                  })()}
+                </Button>
+              }
+            >
+              <ScrollView style={{ maxHeight: 200 }}>
+                {getSupportedCurrencies().map((currency) => (
+                  <Menu.Item
+                    key={currency.code}
+                    onPress={() => {
+                      setSelectedCurrency(currency.code);
+                      setShowCurrencyMenu(false);
+                    }}
+                    title={`${currency.flag} ${currency.code} - ${currency.symbol}`}
+                    titleStyle={currency.code === selectedCurrency ? { fontWeight: 'bold' } : {}}
+                  />
+                ))}
+              </ScrollView>
+            </Menu>
+            
+            {convertedAmount && trip?.defaultCurrency && selectedCurrency !== trip.defaultCurrency && (
+              <View style={styles.conversionInfo}>
+                <Text style={styles.conversionText}>
+                  ≈ {formatCurrencyValue(convertedAmount, trip.defaultCurrency)} 
+                  <Text style={styles.conversionNote}> (moeda da viagem)</Text>
+                </Text>
+              </View>
+            )}
+          </View>
 
           <TextInput
             label="📝 Descrição"
@@ -270,6 +350,32 @@ const styles = StyleSheet.create({
   },
   divider: {
     marginVertical: 16,
+  },
+  currencyContainer: {
+    marginVertical: 8,
+  },
+  currencyButton: {
+    justifyContent: 'flex-start',
+    marginBottom: 8,
+  },
+  currencyButtonContent: {
+    justifyContent: 'flex-start',
+    paddingHorizontal: 8,
+  },
+  conversionInfo: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  conversionText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  conversionNote: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
 });
 

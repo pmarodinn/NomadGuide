@@ -4,6 +4,7 @@ import { Provider as PaperProvider } from 'react-native-paper';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { TripProvider } from './src/contexts/TripContext';
 import { MedicationProvider } from './src/contexts/MedicationContext';
+import { CurrencyProvider } from './src/contexts/CurrencyContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
 // Tema personalizado do Material Design
@@ -53,12 +54,14 @@ export default function App() {
   return (
     <PaperProvider theme={theme}>
       <AuthProvider>
-        <TripProvider>
-          <MedicationProvider>
-            <StatusBar style="light" backgroundColor="#6200ea" />
-            <AppNavigator />
-          </MedicationProvider>
-        </TripProvider>
+        <CurrencyProvider>
+          <TripProvider>
+            <MedicationProvider>
+              <StatusBar style="light" backgroundColor="#6200ea" />
+              <AppNavigator />
+            </MedicationProvider>
+          </TripProvider>
+        </CurrencyProvider>
       </AuthProvider>
     </PaperProvider>
   );

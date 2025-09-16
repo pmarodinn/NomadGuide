@@ -9,21 +9,27 @@ import {
   Chip,
   Dialog,
   Portal,
-  TextInput
+  TextInput,
+  Menu,
+  Divider
 } from 'react-native-paper';
 import { useTripContext } from '../contexts/TripContext';
+import { useCurrencyContext } from '../contexts/CurrencyContext';
 import { formatCurrency } from '../utils/currencyUtils';
 import { formatDate } from '../utils/dateUtils';
 
 const TripListScreen = ({ navigation }) => {
   const { trips, activeTrip, loading, createTrip, updateTrip, activateTrip } = useTripContext();
+  const { getSupportedCurrencies, formatCurrency: formatCurrencyValue, detectCurrencyByCountry } = useCurrencyContext();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
   const [newTripData, setNewTripData] = useState({
     name: '',
     budget: '',
     startDate: new Date(),
     endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-    description: ''
+    description: '',
+    defaultCurrency: 'USD'
   });
 
   const handleCreateTrip = async () => {
@@ -46,6 +52,7 @@ const TripListScreen = ({ navigation }) => {
         startDate: newTripData.startDate,
         endDate: newTripData.endDate,
         description: newTripData.description.trim(),
+        defaultCurrency: newTripData.defaultCurrency,
         isActive: true,
         createdAt: new Date()
       });
@@ -56,7 +63,8 @@ const TripListScreen = ({ navigation }) => {
         budget: '',
         startDate: new Date(),
         endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        description: ''
+        description: '',
+        defaultCurrency: 'USD'
       });
 
       Alert.alert('Sucesso', 'Viagem criada com sucesso!');
@@ -87,7 +95,7 @@ const TripListScreen = ({ navigation }) => {
         </View>
         
         <Paragraph style={styles.tripBudget}>
-          💰 Orçamento: {formatCurrency(trip.budget)}
+          💰 Orçamento: {formatCurrencyValue(trip.budget, trip.defaultCurrency || 'USD')}
         </Paragraph>
         
         <Paragraph style={styles.tripDates}>
@@ -167,13 +175,46 @@ const TripListScreen = ({ navigation }) => {
             />
             
             <TextInput
-              label="Orçamento (R$)"
+              label="Orçamento"
               value={newTripData.budget}
               onChangeText={(text) => setNewTripData(prev => ({ ...prev, budget: text }))}
               keyboardType="numeric"
               mode="outlined"
               style={styles.input}
             />
+
+            <Menu
+              visible={showCurrencyMenu}
+              onDismiss={() => setShowCurrencyMenu(false)}
+              anchor={
+                <Button
+                  mode="outlined"
+                  onPress={() => setShowCurrencyMenu(true)}
+                  style={styles.currencyButton}
+                  contentStyle={styles.currencyButtonContent}
+                  icon="currency-usd"
+                >
+                  {(() => {
+                    const currency = getSupportedCurrencies().find(c => c.code === newTripData.defaultCurrency);
+                    return `${currency?.flag || ''} ${currency?.code || 'USD'} - ${currency?.name || 'Dólar Americano'}`;
+                  })()}
+                </Button>
+              }
+            >
+              <ScrollView style={{ maxHeight: 300 }}>
+                {getSupportedCurrencies().map((currency) => (
+                  <Menu.Item
+                    key={currency.code}
+                    onPress={() => {
+                      setNewTripData(prev => ({ ...prev, defaultCurrency: currency.code }));
+                      setShowCurrencyMenu(false);
+                    }}
+                    title={`${currency.flag} ${currency.code} - ${currency.name}`}
+                    titleStyle={currency.code === newTripData.defaultCurrency ? { fontWeight: 'bold' } : {}}
+                  />
+                ))}
+              </ScrollView>
+            </Menu>
             
             <TextInput
               label="Descrição (opcional)"
@@ -274,6 +315,14 @@ const styles = StyleSheet.create({
   },
   input: {
     marginBottom: 12,
+  },
+  currencyButton: {
+    marginBottom: 12,
+    justifyContent: 'flex-start',
+  },
+  currencyButtonContent: {
+    justifyContent: 'flex-start',
+    paddingHorizontal: 8,
   },
 });
 

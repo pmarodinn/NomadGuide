@@ -9,6 +9,7 @@ import {
   deleteTrip as deleteTripService,
   activateTrip as activateTripService,
   addTransaction as addTransactionService,
+  addRecurringTransaction as addRecurringTransactionService,
   updateTransaction as updateTransactionService,
   deleteTransaction as deleteTransactionService,
   initializeDefaultCategories
@@ -140,6 +141,11 @@ export const TripProvider = ({ children }) => {
     return await addTransactionService(userId, transactionData);
   }, [userId]);
 
+  const addRecurringTransaction = useCallback(async (recurringTransactionData) => {
+    if (!userId) throw new Error('User not authenticated');
+    return await addRecurringTransactionService(userId, recurringTransactionData);
+  }, [userId]);
+
   const updateTransaction = useCallback(async (transactionId, updates) => {
     if (!userId) throw new Error('User not authenticated');
     return await updateTransactionService(userId, transactionId, updates);
@@ -209,6 +215,7 @@ export const TripProvider = ({ children }) => {
     
     // Transaction management
     addTransaction,
+    addRecurringTransaction,
     updateTransaction,
     deleteTransaction,
   };

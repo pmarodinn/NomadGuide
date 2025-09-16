@@ -15,6 +15,7 @@ import {
   Divider
 } from 'react-native-paper';
 import { useTripContext } from '../contexts/TripContext';
+import { useCurrencyContext } from '../contexts/CurrencyContext';
 
 const TripDetailScreen = ({ navigation, route }) => {
   const { tripId } = route.params || {};
@@ -28,10 +29,13 @@ const TripDetailScreen = ({ navigation, route }) => {
     getTripByCategory
   } = useTripContext();
   
+  const { formatCurrency: formatCurrencyValue } = useCurrencyContext();
+  
   const [trip, setTrip] = useState(null);
   const [tripTransactions, setTripTransactions] = useState([]);
   const [categoryStats, setCategoryStats] = useState([]);
   const [balance, setBalance] = useState(0);
+  const [fabOpen, setFabOpen] = useState(false);
 
   useEffect(() => {
     if (tripId && trips) {
@@ -75,10 +79,8 @@ const TripDetailScreen = ({ navigation, route }) => {
   };
 
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value || 0);
+    const currency = trip?.defaultCurrency || 'USD';
+    return formatCurrencyValue(value || 0, currency);
   };
 
   const formatDate = (timestamp) => {
@@ -254,10 +256,23 @@ const TripDetailScreen = ({ navigation, route }) => {
       </ScrollView>
 
       {/* Add Transaction FAB */}
-      <FAB
-        style={styles.fab}
-        icon="plus"
-        onPress={() => navigation.navigate('AddTransaction', { tripId })}
+      <FAB.Group
+        open={fabOpen}
+        icon={fabOpen ? 'close' : 'plus'}
+        actions={[
+          {
+            icon: 'cash',
+            label: 'Transação Simples',
+            onPress: () => navigation.navigate('AddTransaction', { tripId }),
+          },
+          {
+            icon: 'refresh',
+            label: 'Transação Recorrente',
+            onPress: () => navigation.navigate('AddRecurringTransaction', { tripId }),
+          },
+        ]}
+        onStateChange={({ open }) => setFabOpen(open)}
+        style={styles.fabGroup}
       />
     </View>
   );
@@ -402,11 +417,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 4,
   },
-  fab: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
+  fabGroup: {
+    paddingBottom: 16,
   },
   bottomSpacer: {
     height: 80,

@@ -13,6 +13,7 @@ import HomeScreen from '../screens/HomeScreen';
 import TripListScreen from '../screens/TripListScreen';
 import TripDetailScreen from '../screens/TripDetailScreen';
 import AddTransactionScreen from '../screens/AddTransactionScreen';
+import AddRecurringTransactionScreen from '../screens/AddRecurringTransactionScreen';
 import RecurrenceScreen from '../screens/RecurrenceScreen';
 import MedicationListScreen from '../screens/MedicationListScreen';
 import AddMedicationScreen from '../screens/AddMedicationScreen';
@@ -118,6 +119,15 @@ const AppNavigator = () => {
           component={AddTransactionScreen}
           options={{
             title: 'Nova Transação',
+            presentation: 'modal',
+          }}
+        />
+        
+        <Stack.Screen 
+          name="AddRecurringTransaction" 
+          component={AddRecurringTransactionScreen}
+          options={{
+            title: 'Nova Transação Recorrente',
             presentation: 'modal',
           }}
         />

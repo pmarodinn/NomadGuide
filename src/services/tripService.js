@@ -108,6 +108,28 @@ export const addTransaction = async (userId, transactionData) => {
   }
 };
 
+export const addRecurringTransaction = async (userId, recurringTransactionData) => {
+  try {
+    const recurringTransactionsRef = collection(db, 'users', userId, 'recurringTransactions');
+    const docRef = await addDoc(recurringTransactionsRef, {
+      ...recurringTransactionData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      // Convert dates to Firestore Timestamps if they're regular Dates
+      startDate: recurringTransactionData.startDate instanceof Date ? 
+        Timestamp.fromDate(recurringTransactionData.startDate) : 
+        recurringTransactionData.startDate,
+      endDate: recurringTransactionData.endDate instanceof Date ? 
+        Timestamp.fromDate(recurringTransactionData.endDate) : 
+        recurringTransactionData.endDate
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Erro ao adicionar transação recorrente:', error);
+    throw error;
+  }
+};
+
 export const updateTransaction = async (userId, transactionId, updates) => {
   try {
     const transactionRef = doc(db, 'users', userId, 'transactions', transactionId);

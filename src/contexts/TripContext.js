@@ -34,6 +34,7 @@ export const TripProvider = ({ children }) => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  const [categoriesInitializing, setCategoriesInitializing] = useState(false);
 
   // Initialize default categories for new users
   useEffect(() => {
@@ -41,14 +42,25 @@ export const TripProvider = ({ children }) => {
 
     const initializeUser = async () => {
       try {
+        let unsubscribe;
+        let isFirstLoad = true;
+        
         // Check if user already has categories
-        const unsubscribe = subscribeToCategories(userId, (categoriesData) => {
-          if (categoriesData.length === 0) {
+        unsubscribe = subscribeToCategories(userId, async (categoriesData) => {
+          if (isFirstLoad && categoriesData.length === 0 && !categoriesInitializing) {
             // User has no categories, initialize defaults
-            initializeDefaultCategories(userId).catch(console.error);
+            setCategoriesInitializing(true);
+            try {
+              await initializeDefaultCategories(userId);
+              console.log('✅ Default categories initialized successfully');
+            } catch (error) {
+              console.error('❌ Error initializing default categories:', error);
+            } finally {
+              setCategoriesInitializing(false);
+            }
           }
           setCategories(categoriesData);
-          unsubscribe(); // Unsubscribe after first check
+          isFirstLoad = false;
         });
         
         setInitialized(true);
@@ -59,7 +71,7 @@ export const TripProvider = ({ children }) => {
     };
 
     initializeUser();
-  }, [userId, initialized]);
+  }, [userId, initialized, categoriesInitializing]);
 
   // Listen to trips
   useEffect(() => {
@@ -108,12 +120,14 @@ export const TripProvider = ({ children }) => {
   }, [userId]);
 
   const updateTrip = useCallback(async (tripId, updates) => {
-    return await updateTripService(tripId, updates);
-  }, []);
+    if (!userId) throw new Error('User not authenticated');
+    return await updateTripService(userId, tripId, updates);
+  }, [userId]);
 
   const deleteTrip = useCallback(async (tripId) => {
-    return await deleteTripService(tripId);
-  }, []);
+    if (!userId) throw new Error('User not authenticated');
+    return await deleteTripService(userId, tripId);
+  }, [userId]);
 
   const activateTrip = useCallback(async (tripId) => {
     if (!userId) throw new Error('User not authenticated');
@@ -127,12 +141,14 @@ export const TripProvider = ({ children }) => {
   }, [userId]);
 
   const updateTransaction = useCallback(async (transactionId, updates) => {
-    return await updateTransactionService(transactionId, updates);
-  }, []);
+    if (!userId) throw new Error('User not authenticated');
+    return await updateTransactionService(userId, transactionId, updates);
+  }, [userId]);
 
   const deleteTransaction = useCallback(async (transactionId) => {
-    return await deleteTransactionService(transactionId);
-  }, []);
+    if (!userId) throw new Error('User not authenticated');
+    return await deleteTransactionService(userId, transactionId);
+  }, [userId]);
 
   // Helper functions
   const getActiveTrip = useCallback(() => {

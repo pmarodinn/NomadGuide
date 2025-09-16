@@ -30,10 +30,9 @@ export const MedicationProvider = ({ children }) => {
     }
 
     try {
-      const medicationsRef = collection(db, 'medications');
+      const medicationsRef = collection(db, 'users', userId, 'medications');
       const q = query(
         medicationsRef, 
-        where('userId', '==', userId),
         orderBy('name')
       );
 

@@ -16,39 +16,42 @@ import { db } from '../config/firebaseConfig';
 // Trip Management
 export const createTrip = async (userId, tripData) => {
   try {
-    const docRef = await addDoc(collection(db, 'trips'), {
+    const tripsRef = collection(db, 'users', userId, 'trips');
+    const docRef = await addDoc(tripsRef, {
       ...tripData,
-      userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       isActive: false
     });
+    console.log('✅ Trip created successfully:', docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error('Erro ao criar viagem:', error);
+    console.error('❌ Error creating trip:', error);
     throw error;
   }
 };
 
-export const updateTrip = async (tripId, updates) => {
+export const updateTrip = async (userId, tripId, updates) => {
   try {
-    const tripRef = doc(db, 'trips', tripId);
+    const tripRef = doc(db, 'users', userId, 'trips', tripId);
     await updateDoc(tripRef, {
       ...updates,
       updatedAt: serverTimestamp()
     });
+    console.log('✅ Trip updated successfully');
   } catch (error) {
-    console.error('Erro ao atualizar viagem:', error);
+    console.error('❌ Error updating trip:', error);
     throw error;
   }
 };
 
-export const deleteTrip = async (tripId) => {
+export const deleteTrip = async (userId, tripId) => {
   try {
-    const tripRef = doc(db, 'trips', tripId);
+    const tripRef = doc(db, 'users', userId, 'trips', tripId);
     await deleteDoc(tripRef);
+    console.log('✅ Trip deleted successfully');
   } catch (error) {
-    console.error('Erro ao excluir viagem:', error);
+    console.error('❌ Error deleting trip:', error);
     throw error;
   }
 };
@@ -57,8 +60,7 @@ export const activateTrip = async (tripId, userId) => {
   try {
     // First, deactivate all other trips for this user
     const tripsQuery = query(
-      collection(db, 'trips'),
-      where('userId', '==', userId),
+      collection(db, 'users', userId, 'trips'),
       where('isActive', '==', true)
     );
 
@@ -75,7 +77,7 @@ export const activateTrip = async (tripId, userId) => {
       await Promise.all(batch);
       
       // Now activate the selected trip
-      await updateTrip(tripId, { isActive: true });
+      await updateTrip(userId, tripId, { isActive: true });
       
       // Unsubscribe immediately as this is a one-time operation
       unsubscribe();
@@ -89,9 +91,9 @@ export const activateTrip = async (tripId, userId) => {
 // Transaction Management
 export const addTransaction = async (userId, transactionData) => {
   try {
-    const docRef = await addDoc(collection(db, 'transactions'), {
+    const transactionsRef = collection(db, 'users', userId, 'transactions');
+    const docRef = await addDoc(transactionsRef, {
       ...transactionData,
-      userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       // Convert date to Firestore Timestamp if it's a regular Date
@@ -106,9 +108,9 @@ export const addTransaction = async (userId, transactionData) => {
   }
 };
 
-export const updateTransaction = async (transactionId, updates) => {
+export const updateTransaction = async (userId, transactionId, updates) => {
   try {
-    const transactionRef = doc(db, 'transactions', transactionId);
+    const transactionRef = doc(db, 'users', userId, 'transactions', transactionId);
     await updateDoc(transactionRef, {
       ...updates,
       updatedAt: serverTimestamp(),
@@ -117,18 +119,20 @@ export const updateTransaction = async (transactionId, updates) => {
         date: Timestamp.fromDate(updates.date)
       })
     });
+    console.log('✅ Transaction updated successfully');
   } catch (error) {
-    console.error('Erro ao atualizar transação:', error);
+    console.error('❌ Error updating transaction:', error);
     throw error;
   }
 };
 
-export const deleteTransaction = async (transactionId) => {
+export const deleteTransaction = async (userId, transactionId) => {
   try {
-    const transactionRef = doc(db, 'transactions', transactionId);
+    const transactionRef = doc(db, 'users', userId, 'transactions', transactionId);
     await deleteDoc(transactionRef);
+    console.log('✅ Transaction deleted successfully');
   } catch (error) {
-    console.error('Erro ao excluir transação:', error);
+    console.error('❌ Error deleting transaction:', error);
     throw error;
   }
 };
@@ -136,9 +140,9 @@ export const deleteTransaction = async (transactionId) => {
 // Category Management
 export const createCategory = async (userId, categoryData) => {
   try {
-    const docRef = await addDoc(collection(db, 'categories'), {
+    const categoriesRef = collection(db, 'users', userId, 'categories');
+    const docRef = await addDoc(categoriesRef, {
       ...categoryData,
-      userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -149,25 +153,27 @@ export const createCategory = async (userId, categoryData) => {
   }
 };
 
-export const updateCategory = async (categoryId, updates) => {
+export const updateCategory = async (userId, categoryId, updates) => {
   try {
-    const categoryRef = doc(db, 'categories', categoryId);
+    const categoryRef = doc(db, 'users', userId, 'categories', categoryId);
     await updateDoc(categoryRef, {
       ...updates,
       updatedAt: serverTimestamp()
     });
+    console.log('✅ Category updated successfully');
   } catch (error) {
-    console.error('Erro ao atualizar categoria:', error);
+    console.error('❌ Error updating category:', error);
     throw error;
   }
 };
 
-export const deleteCategory = async (categoryId) => {
+export const deleteCategory = async (userId, categoryId) => {
   try {
-    const categoryRef = doc(db, 'categories', categoryId);
+    const categoryRef = doc(db, 'users', userId, 'categories', categoryId);
     await deleteDoc(categoryRef);
+    console.log('✅ Category deleted successfully');
   } catch (error) {
-    console.error('Erro ao excluir categoria:', error);
+    console.error('❌ Error deleting category:', error);
     throw error;
   }
 };
@@ -176,8 +182,7 @@ export const deleteCategory = async (categoryId) => {
 export const subscribeToTrips = (userId, callback) => {
   try {
     const q = query(
-      collection(db, 'trips'),
-      where('userId', '==', userId),
+      collection(db, 'users', userId, 'trips'),
       orderBy('createdAt', 'desc')
     );
 
@@ -205,8 +210,7 @@ export const subscribeToTrips = (userId, callback) => {
 export const subscribeToTransactions = (userId, callback) => {
   try {
     const q = query(
-      collection(db, 'transactions'),
-      where('userId', '==', userId),
+      collection(db, 'users', userId, 'transactions'),
       orderBy('date', 'desc')
     );
 
@@ -233,8 +237,7 @@ export const subscribeToTransactions = (userId, callback) => {
 export const subscribeToCategories = (userId, callback) => {
   try {
     const q = query(
-      collection(db, 'categories'),
-      where('userId', '==', userId),
+      collection(db, 'users', userId, 'categories'),
       orderBy('name', 'asc')
     );
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { 
   Title, 
   Paragraph, 
@@ -10,14 +10,18 @@ import {
   Chip,
   Snackbar
 } from 'react-native-paper';
+import { useAuth } from '../contexts/AuthContext';
+import { createMedication } from '../services/firebase';
 
 const AddMedicationScreen = ({ navigation }) => {
+  const { userId } = useAuth();
   const [name, setName] = useState('');
   const [dosage, setDosage] = useState('');
   const [frequency, setFrequency] = useState(8); // horas
   const [duration, setDuration] = useState('');
   const [notes, setNotes] = useState('');
   const [showSnackbar, setShowSnackbar] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const frequencyOptions = [
     { label: 'A cada 4 horas', value: 4 },
@@ -27,24 +31,39 @@ const AddMedicationScreen = ({ navigation }) => {
     { label: 'Uma vez ao dia', value: 24 },
   ];
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name || !dosage || !duration) {
       setShowSnackbar(true);
       return;
     }
 
-    // TODO: Implementar salvamento do medicamento
-    console.log('Novo medicamento:', {
-      name,
-      dosage,
-      frequency,
-      duration: parseInt(duration),
-      notes,
-      startDate: new Date(),
-    });
+    if (!userId) {
+      Alert.alert('Erro', 'Usuário não autenticado');
+      return;
+    }
 
-    // Navegar de volta
-    navigation.goBack();
+    setLoading(true);
+    try {
+      await createMedication(userId, {
+        name: name.trim(),
+        dosage: dosage.trim(),
+        frequency,
+        duration: parseInt(duration),
+        notes: notes.trim(),
+        startDate: new Date(),
+        isActive: true,
+        createdAt: new Date()
+      });
+
+      Alert.alert('Sucesso', 'Medicamento adicionado com sucesso!', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
+    } catch (error) {
+      console.error('Erro ao adicionar medicamento:', error);
+      Alert.alert('Erro', 'Não foi possível adicionar o medicamento');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -115,8 +134,10 @@ const AddMedicationScreen = ({ navigation }) => {
             onPress={handleSubmit}
             style={styles.button}
             icon="plus"
+            loading={loading}
+            disabled={loading}
           >
-            Adicionar Medicamento
+            {loading ? 'Salvando...' : 'Adicionar Medicamento'}
           </Button>
         </Card.Content>
       </Card>

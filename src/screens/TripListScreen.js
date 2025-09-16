@@ -14,10 +14,9 @@ import {
 import { useTripContext } from '../contexts/TripContext';
 import { formatCurrency } from '../utils/currencyUtils';
 import { formatDate } from '../utils/dateUtils';
-import { createTrip, updateTrip } from '../services/firebase';
 
 const TripListScreen = ({ navigation }) => {
-  const { trips, activeTrip, loading } = useTripContext();
+  const { trips, activeTrip, loading, createTrip, updateTrip, activateTrip } = useTripContext();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newTripData, setNewTripData] = useState({
     name: '',
@@ -40,12 +39,7 @@ const TripListScreen = ({ navigation }) => {
     }
 
     try {
-      // Desativar viagem atual se houver
-      if (activeTrip) {
-        await updateTrip(activeTrip.id, { isActive: false });
-      }
-
-      // Criar nova viagem
+      // Criar nova viagem (o contexto já gerencia userId e ativação)
       await createTrip({
         name: newTripData.name.trim(),
         budget: budget,
@@ -74,13 +68,8 @@ const TripListScreen = ({ navigation }) => {
 
   const handleActivateTrip = async (trip) => {
     try {
-      // Desativar viagem atual
-      if (activeTrip && activeTrip.id !== trip.id) {
-        await updateTrip(activeTrip.id, { isActive: false });
-      }
-      
-      // Ativar nova viagem
-      await updateTrip(trip.id, { isActive: true });
+      // Usar a função de ativação do contexto que já gerencia tudo
+      await activateTrip(trip.id);
       
       Alert.alert('Sucesso', `Viagem "${trip.name}" ativada!`);
     } catch (error) {

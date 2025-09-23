@@ -12,7 +12,9 @@ import {
   IconButton,
   Surface,
   ProgressBar,
-  Divider
+  Divider,
+  Portal,
+  Dialog
 } from 'react-native-paper';
 import { useTripContext } from '../contexts/TripContext';
 import { useCurrencyContext } from '../contexts/CurrencyContext';
@@ -23,10 +25,13 @@ const TripDetailScreen = ({ navigation, route }) => {
     trips, 
     transactions, 
     categories,
+    recurringTransactions,
     deleteTransaction, 
     getTripBalance,
     getTripTransactions,
-    getTripByCategory
+    getTripByCategory,
+    getProjectedBalance,
+    confirmRecurringOccurrence,
   } = useTripContext();
   
   const { formatCurrency: formatCurrencyValue } = useCurrencyContext();
@@ -35,7 +40,9 @@ const TripDetailScreen = ({ navigation, route }) => {
   const [tripTransactions, setTripTransactions] = useState([]);
   const [categoryStats, setCategoryStats] = useState([]);
   const [balance, setBalance] = useState(0);
+  const [projected, setProjected] = useState(0);
   const [fabOpen, setFabOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ visible: false, recurring: null });
 
   useEffect(() => {
     if (tripId && trips) {
@@ -46,8 +53,9 @@ const TripDetailScreen = ({ navigation, route }) => {
         const tripTxns = getTripTransactions(tripId);
         setTripTransactions(tripTxns);
         setBalance(getTripBalance(tripId));
+        setProjected(getProjectedBalance(tripId));
         
-        // Calculate category statistics
+        // Calculate category statistics (expenses only)
         const stats = categories.map(category => {
           const categoryTransactions = getTripByCategory(tripId, category.id);
           const total = categoryTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -61,7 +69,7 @@ const TripDetailScreen = ({ navigation, route }) => {
         setCategoryStats(stats);
       }
     }
-  }, [tripId, trips, transactions, categories]);
+  }, [tripId, trips, transactions, categories, recurringTransactions]);
 
   const handleDeleteTransaction = (transactionId) => {
     Alert.alert(
@@ -99,6 +107,27 @@ const TripDetailScreen = ({ navigation, route }) => {
     if (!trip?.budget || trip.budget === 0) return 0;
     const spent = Math.abs(balance - (trip.budget || 0));
     return Math.min(spent / trip.budget, 1);
+  };
+
+  const dueRecurrences = (() => {
+    const today = new Date();
+    return (recurringTransactions || []).filter(r => r.tripId === tripId && (() => {
+      const start = r.startDate?.toDate?.() || new Date(r.startDate);
+      const end = r.endDate?.toDate?.() || new Date(r.endDate);
+      if (!start || !end) return false;
+      // next occurrence date calculation (simplified to: if today >= start and today <= end)
+      return today >= start && today <= end;
+    })());
+  })();
+
+  const handleConfirmRecurring = async () => {
+    if (!confirmDialog.recurring) return;
+    try {
+      await confirmRecurringOccurrence(confirmDialog.recurring);
+      setConfirmDialog({ visible: false, recurring: null });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   if (!trip) {
@@ -143,28 +172,16 @@ const TripDetailScreen = ({ navigation, route }) => {
           <Card.Content>
             <View style={styles.budgetRow}>
               <Text style={styles.budgetLabel}>Orçamento:</Text>
-              <Text style={styles.budgetValue}>{formatCurrency(trip.budget)}</Text>
+              <Text style={styles.budgetValue}>{formatCurrency(trip?.budget)}</Text>
             </View>
-            
             <View style={styles.budgetRow}>
-              <Text style={styles.budgetLabel}>Saldo Atual:</Text>
-              <Text style={[styles.balanceValue, { color: getBalanceColor() }]}>
-                {formatCurrency(balance)}
-              </Text>
+              <Text style={styles.budgetLabel}>Saldo Efetivo:</Text>
+              <Text style={[styles.balanceValue]}>{formatCurrency(balance)}</Text>
             </View>
-            
-            {trip.budget > 0 && (
-              <View style={styles.progressContainer}>
-                <Text style={styles.progressLabel}>
-                  Gasto: {Math.round(getBudgetProgress() * 100)}%
-                </Text>
-                <ProgressBar 
-                  progress={getBudgetProgress()} 
-                  color={getBudgetProgress() > 0.8 ? '#F44336' : '#2196F3'}
-                  style={styles.progressBar}
-                />
-              </View>
-            )}
+            <View style={styles.budgetRow}>
+              <Text style={styles.budgetLabel}>Saldo Projetado:</Text>
+              <Text style={[styles.balanceValue]}>{formatCurrency(projected)}</Text>
+            </View>
           </Card.Content>
         </Card>
 
@@ -212,15 +229,17 @@ const TripDetailScreen = ({ navigation, route }) => {
                 })
                 .map((transaction) => {
                   const category = categories.find(c => c.id === transaction.categoryId);
+                  const defaultLabel = transaction.type === 'income' ? 'Receita não informada' : 'Gasto não informado';
+                  const categoryLabel = category?.name || transaction.categoryName || defaultLabel;
                   return (
                     <Surface key={transaction.id} style={styles.transactionCard}>
                       <View style={styles.transactionHeader}>
                         <View style={styles.transactionInfo}>
                           <Text style={styles.transactionTitle}>
-                            {transaction.description}
+                            {transaction.description || 'Sem descrição'}
                           </Text>
                           <Text style={styles.transactionCategory}>
-                            {category?.name || 'Categoria não encontrada'}
+                            {categoryLabel}
                           </Text>
                           <Text style={styles.transactionDate}>
                             {formatDate(transaction.date)}
@@ -251,6 +270,38 @@ const TripDetailScreen = ({ navigation, route }) => {
             )}
           </Card.Content>
         </Card>
+
+        {/* Recurring confirmations */}
+        {dueRecurrences.length > 0 && (
+          <Card style={styles.card}>
+            <Card.Title title="Confirmações Pendentes" subtitle="Transações recorrentes com ocorrência para hoje" />
+            <Card.Content>
+              {dueRecurrences.map(r => (
+                <View key={r.id} style={styles.recurringRow}>
+                  <Text style={styles.recurringText}>
+                    {r.description || `${r.frequency} - ${r.type === 'expense' ? 'Gasto' : 'Receita'}`} — {formatCurrency(r.amount)}
+                  </Text>
+                  <Button mode="contained" onPress={() => setConfirmDialog({ visible: true, recurring: r })}>
+                    Confirmar
+                  </Button>
+                </View>
+              ))}
+            </Card.Content>
+          </Card>
+        )}
+
+        <Portal>
+          <Dialog visible={confirmDialog.visible} onDismiss={() => setConfirmDialog({ visible: false, recurring: null })}>
+            <Dialog.Title>Confirmar recorrente</Dialog.Title>
+            <Dialog.Content>
+              <Paragraph>Deseja aplicar esta ocorrência ao saldo efetivo?</Paragraph>
+            </Dialog.Content>
+            <Dialog.Actions>
+              <Button onPress={() => setConfirmDialog({ visible: false, recurring: null })}>Cancelar</Button>
+              <Button mode="contained" onPress={handleConfirmRecurring}>Confirmar</Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -422,6 +473,16 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 80,
+  },
+  recurringRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 6,
+  },
+  recurringText: {
+    flex: 1,
+    marginRight: 8,
   },
 });
 

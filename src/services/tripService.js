@@ -9,7 +9,8 @@ import {
   orderBy, 
   onSnapshot,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  getDocs
 } from 'firebase/firestore';
 import { db } from '../config/firebaseConfig';
 
@@ -17,11 +18,23 @@ import { db } from '../config/firebaseConfig';
 export const createTrip = async (userId, tripData) => {
   try {
     const tripsRef = collection(db, 'users', userId, 'trips');
+
+    // If creating as active, deactivate other active trips first
+    if (tripData?.isActive) {
+      const activeQuery = query(tripsRef, where('isActive', '==', true));
+      const activeSnapshot = await getDocs(activeQuery);
+      const deactivations = activeSnapshot.docs.map(d => 
+        updateDoc(d.ref, { isActive: false, updatedAt: serverTimestamp() })
+      );
+      await Promise.all(deactivations);
+    }
+
     const docRef = await addDoc(tripsRef, {
       ...tripData,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      isActive: false
+      // Default to false unless explicitly requested
+      isActive: !!tripData?.isActive
     });
     console.log('✅ Trip created successfully:', docRef.id);
     return docRef.id;
@@ -58,30 +71,23 @@ export const deleteTrip = async (userId, tripId) => {
 
 export const activateTrip = async (tripId, userId) => {
   try {
-    // First, deactivate all other trips for this user
-    const tripsQuery = query(
-      collection(db, 'users', userId, 'trips'),
-      where('isActive', '==', true)
-    );
+    const tripsRef = collection(db, 'users', userId, 'trips');
 
-    // We need to get the trips first, then update them
-    const unsubscribe = onSnapshot(tripsQuery, async (snapshot) => {
-      const batch = [];
-      snapshot.forEach((doc) => {
-        if (doc.id !== tripId) {
-          batch.push(updateDoc(doc.ref, { isActive: false, updatedAt: serverTimestamp() }));
-        }
-      });
-      
-      // Wait for all deactivations to complete
-      await Promise.all(batch);
-      
-      // Now activate the selected trip
-      await updateTrip(userId, tripId, { isActive: true });
-      
-      // Unsubscribe immediately as this is a one-time operation
-      unsubscribe();
-    });
+    // Deactivate any currently active trips (except the one being activated)
+    const activeQuery = query(tripsRef, where('isActive', '==', true));
+    const activeSnapshot = await getDocs(activeQuery);
+    const deactivations = activeSnapshot.docs
+      .filter(d => d.id !== tripId)
+      .map(d => updateDoc(d.ref, { isActive: false, updatedAt: serverTimestamp() }));
+
+    await Promise.all(deactivations);
+
+    // Activate the selected trip
+    const tripRef = doc(db, 'users', userId, 'trips', tripId);
+    await updateDoc(tripRef, { isActive: true, updatedAt: serverTimestamp() });
+
+    console.log('✅ Trip activated successfully');
+    return true;
   } catch (error) {
     console.error('Erro ao ativar viagem:', error);
     throw error;
@@ -94,9 +100,12 @@ export const addTransaction = async (userId, transactionData) => {
     const transactionsRef = collection(db, 'users', userId, 'transactions');
     const docRef = await addDoc(transactionsRef, {
       ...transactionData,
+      // Default category labels when none selected
+      ...(transactionData.categoryId ? {} : { 
+        categoryName: transactionData.categoryName || (transactionData.type === 'income' ? 'Receita não informada' : 'Gasto não informado') 
+      }),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      // Convert date to Firestore Timestamp if it's a regular Date
       date: transactionData.date instanceof Date ? 
         Timestamp.fromDate(transactionData.date) : 
         transactionData.date
@@ -113,9 +122,11 @@ export const addRecurringTransaction = async (userId, recurringTransactionData) 
     const recurringTransactionsRef = collection(db, 'users', userId, 'recurringTransactions');
     const docRef = await addDoc(recurringTransactionsRef, {
       ...recurringTransactionData,
+      ...(recurringTransactionData.categoryId ? {} : { 
+        categoryName: recurringTransactionData.categoryName || (recurringTransactionData.type === 'income' ? 'Receita não informada' : 'Gasto não informada') 
+      }),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      // Convert dates to Firestore Timestamps if they're regular Dates
       startDate: recurringTransactionData.startDate instanceof Date ? 
         Timestamp.fromDate(recurringTransactionData.startDate) : 
         recurringTransactionData.startDate,
@@ -283,6 +294,33 @@ export const subscribeToCategories = (userId, callback) => {
   }
 };
 
+export const subscribeToRecurringTransactions = (userId, callback) => {
+  try {
+    const q = query(
+      collection(db, 'users', userId, 'recurringTransactions'),
+      orderBy('startDate', 'desc')
+    );
+
+    return onSnapshot(q, 
+      (snapshot) => {
+        const recurrences = [];
+        snapshot.forEach((docSnap) => {
+          recurrences.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        callback(recurrences);
+      },
+      (error) => {
+        console.error('Error in recurring transactions subscription:', error);
+        callback([]);
+      }
+    );
+  } catch (error) {
+    console.error('Error setting up recurring transactions subscription:', error);
+    callback([]);
+    return () => {};
+  }
+};
+
 // Helper function to initialize default categories for a new user
 export const initializeDefaultCategories = async (userId) => {
   const defaultCategories = [
@@ -302,6 +340,45 @@ export const initializeDefaultCategories = async (userId) => {
     await Promise.all(promises);
   } catch (error) {
     console.error('Erro ao inicializar categorias padrão:', error);
+    throw error;
+  }
+};
+
+// Updater function to mark applied dates for recurring transactions
+export const markRecurringTransactionsAsApplied = async (userId, transactionDate) => {
+  try {
+    const startOfDay = Timestamp.fromDate(new Date(transactionDate.setHours(0, 0, 0, 0)));
+    const endOfDay = Timestamp.fromDate(new Date(transactionDate.setHours(23, 59, 59, 999)));
+
+    const recurringTransactionsRef = collection(db, 'users', userId, 'recurringTransactions');
+    const q = query(
+      recurringTransactionsRef,
+      where('nextRun', '>=', startOfDay),
+      where('nextRun', '<=', endOfDay)
+    );
+
+    const snapshot = await getDocs(q);
+    const updates = snapshot.docs.map(doc => {
+      const data = doc.data();
+      const newNextRun = data.frequency === 'daily' ? 
+        new Date(data.nextRun.toDate().setDate(data.nextRun.toDate().getDate() + 1)) :
+        data.frequency === 'weekly' ?
+        new Date(data.nextRun.toDate().setDate(data.nextRun.toDate().getDate() + 7)) :
+        data.frequency === 'monthly' ?
+        new Date(data.nextRun.toDate().setMonth(data.nextRun.toDate().getMonth() + 1)) :
+        null;
+
+      return newNextRun ? 
+        updateDoc(doc.ref, { 
+          lastAppliedDate: serverTimestamp(), 
+          nextRun: Timestamp.fromDate(newNextRun) 
+        }) : null;
+    }).filter(Boolean);
+
+    await Promise.all(updates);
+    console.log('✅ Recurring transactions marked as applied');
+  } catch (error) {
+    console.error('❌ Error marking recurring transactions as applied:', error);
     throw error;
   }
 };

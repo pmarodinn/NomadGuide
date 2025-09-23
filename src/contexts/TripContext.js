@@ -12,7 +12,9 @@ import {
   addRecurringTransaction as addRecurringTransactionService,
   updateTransaction as updateTransactionService,
   deleteTransaction as deleteTransactionService,
-  initializeDefaultCategories
+  initializeDefaultCategories,
+  subscribeToRecurringTransactions,
+  updateRecurringTransaction
 } from '../services/tripService';
 
 const TripContext = createContext({});
@@ -32,6 +34,7 @@ export const TripProvider = ({ children }) => {
   const { userId } = useAuth();
   const [trips, setTrips] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [recurringTransactions, setRecurringTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
@@ -114,6 +117,20 @@ export const TripProvider = ({ children }) => {
     return unsubscribe;
   }, [userId, initialized]);
 
+  // Listen to recurring transactions
+  useEffect(() => {
+    if (!userId) {
+      setRecurringTransactions([]);
+      return;
+    }
+
+    const unsubscribe = subscribeToRecurringTransactions(userId, (data) => {
+      setRecurringTransactions(data);
+    });
+
+    return unsubscribe;
+  }, [userId]);
+
   // Trip management functions
   const createTrip = useCallback(async (tripData) => {
     if (!userId) throw new Error('User not authenticated');
@@ -193,10 +210,77 @@ export const TripProvider = ({ children }) => {
     return categories.find(category => category.id === categoryId);
   }, [categories]);
 
+  // Helper: compute projected balance including recurring occurrences up to today or end date
+  const getProjectedBalance = useCallback((tripId) => {
+    const trip = trips.find(t => t.id === tripId);
+    if (!trip) return 0;
+
+    // Effective: budget minus executed transactions
+    const base = (trip.budget || 0) - transactions
+      .filter(t => t.tripId === tripId)
+      .reduce((sum, t) => sum + (t.type === 'expense' ? (t.amount || 0) : -(t.amount || 0)), 0);
+
+    // Projected impact from recurring transactions
+    const today = new Date();
+    const recurrences = recurringTransactions.filter(r => r.tripId === tripId);
+
+    const projectImpact = recurrences.reduce((acc, r) => {
+      const start = r.startDate?.toDate?.() || new Date(r.startDate);
+      const end = r.endDate?.toDate?.() || new Date(r.endDate);
+      if (!start || !end || start > end) return acc;
+
+      // count occurrences up to min(today, end)
+      const limit = today < end ? today : end;
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const diffDays = Math.floor((limit - start) / msPerDay);
+
+      const freq = r.frequency; // daily, weekly, monthly, quarterly, biannual
+      let occurrences = 0;
+      if (freq === 'daily') {
+        occurrences = diffDays + 1;
+      } else if (freq === 'weekly') {
+        occurrences = Math.floor(diffDays / 7) + 1;
+      } else if (freq === 'monthly') {
+        occurrences = Math.floor(diffDays / 30) + 1;
+      } else if (freq === 'quarterly') {
+        occurrences = Math.floor(diffDays / 90) + 1;
+      } else if (freq === 'biannual') {
+        occurrences = Math.floor(diffDays / 180) + 1;
+      }
+
+      const amount = r.amount || 0;
+      const sign = r.type === 'expense' ? 1 : -1;
+      return acc + (occurrences * amount * sign);
+    }, 0);
+
+    return base - projectImpact; // subtract expenses, add incomes
+  }, [trips, transactions, recurringTransactions]);
+
+  // Confirm a due occurrence: creates a normal transaction and updates lastAppliedDate
+  const confirmRecurringOccurrence = useCallback(async (recurring) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    // Create effective transaction mirroring the recurring
+    await addTransactionService(userId, {
+      tripId: recurring.tripId,
+      amount: recurring.amount,
+      description: recurring.description || `${recurring.frequency} recorrente`,
+      type: recurring.type,
+      categoryId: recurring.categoryId || null,
+      categoryName: recurring.categoryName,
+      currency: recurring.currency,
+      date: new Date(),
+    });
+
+    // Update recurring last applied date
+    await updateRecurringTransaction(userId, recurring.id, { lastAppliedDate: new Date() });
+  }, [userId]);
+
   const value = {
     // Data
     trips,
     transactions,
+    recurringTransactions,
     categories,
     loading,
     
@@ -206,6 +290,7 @@ export const TripProvider = ({ children }) => {
     getTripBalance,
     getTripByCategory,
     getCategoryById,
+    getProjectedBalance,
     
     // Trip management
     createTrip,
@@ -218,6 +303,9 @@ export const TripProvider = ({ children }) => {
     addRecurringTransaction,
     updateTransaction,
     deleteTransaction,
+
+    // Recurring confirmation
+    confirmRecurringOccurrence,
   };
 
   return (

@@ -60,7 +60,7 @@ const HomeScreen = ({ navigation }) => {
     if (!activeTrip) {
       Alert.alert(
         'Nenhuma Viagem Ativa',
-        'Crie uma viagem primeiro para adicionar gastos.',
+        'Crie uma viagem primeiro para adicionar transações.',
         [
           { text: 'Cancelar', style: 'cancel' },
           { text: 'Criar Viagem', onPress: () => navigation.navigate('TripList') }
@@ -72,6 +72,24 @@ const HomeScreen = ({ navigation }) => {
     navigation.navigate('AddTransaction', { 
       tripId: activeTrip.id,
       type: 'expense' 
+    });
+  };
+
+  const handleQuickAddRecurring = () => {
+    if (!activeTrip) {
+      Alert.alert(
+        'Nenhuma Viagem Ativa',
+        'Crie uma viagem primeiro para adicionar transações recorrentes.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Criar Viagem', onPress: () => navigation.navigate('TripList') }
+        ]
+      );
+      return;
+    }
+
+    navigation.navigate('AddRecurringTransaction', {
+      tripId: activeTrip.id,
     });
   };
 
@@ -318,12 +336,20 @@ const HomeScreen = ({ navigation }) => {
       </ScrollView>
 
       {/* Floating Action Button */}
-      <FAB
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        icon="plus"
-        onPress={handleQuickAddExpense}
-        label="Gasto"
-      />
+      <View style={styles.fabContainer}>
+        <FAB
+          style={[styles.fabButton, { backgroundColor: theme.colors.primary }]}
+          icon="cash"
+          label="Transação Simples"
+          onPress={handleQuickAddExpense}
+        />
+        <FAB
+          style={[styles.fabButton, { backgroundColor: theme.colors.primary, marginTop: 12 }]}
+          icon="refresh"
+          label="Transação Recorrente"
+          onPress={handleQuickAddRecurring}
+        />
+      </View>
     </View>
   );
 };
@@ -488,6 +514,16 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 0,
+  },
+  fabButton: {
+    // relative inside absolute container to allow stacking
+  },
+  fabContainer: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    margin: 16,
+    alignItems: 'flex-end',
   },
 });
 

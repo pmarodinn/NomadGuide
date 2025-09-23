@@ -254,7 +254,10 @@ const TripDetailScreen = ({ navigation, route }) => {
                             }
                           ]}>
                             {transaction.type === 'income' ? '+' : '-'}
-                            {formatCurrency(Math.abs(transaction.amount))}
+                            {formatCurrencyValue(
+                              Math.abs(transaction.amount),
+                              transaction.currency || trip?.defaultCurrency || 'USD'
+                            )}
                           </Text>
                           
                           <IconButton

@@ -12,7 +12,8 @@ import {
   TextInput,
   Menu,
   Divider,
-  Text
+  Text,
+  useTheme
 } from 'react-native-paper';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useTripContext } from '../contexts/TripContext';
@@ -23,6 +24,7 @@ import { formatDate } from '../utils/dateUtils';
 const TripListScreen = ({ navigation }) => {
   const { trips, activeTrip, loading, createTrip, updateTrip, activateTrip } = useTripContext();
   const { getSupportedCurrencies, formatCurrency: formatCurrencyValue, detectCurrencyByCountry, convertCurrency } = useCurrencyContext();
+  const theme = useTheme();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
   const [showBudgetCurrencyMenu, setShowBudgetCurrencyMenu] = useState(false);
@@ -252,27 +254,35 @@ const TripListScreen = ({ navigation }) => {
       <Card.Content>
         <View style={styles.tripHeader}>
           <Title style={styles.tripTitle}>{trip.name}</Title>
-          {trip.isActive && <Chip mode="flat" textStyle={styles.activeChip}>ATIVA</Chip>}
+          {trip.isActive && <Chip mode="flat" style={styles.activeChip} textStyle={styles.activeChipText}>ATIVA</Chip>}
         </View>
         
         <Paragraph style={styles.tripBudget}>
           💰 Orçamento: {formatCurrencyValue(trip.budget, trip.defaultCurrency || 'USD')}
         </Paragraph>
         
-        <Paragraph style={styles.tripDates}>
-          📅 {formatDate(trip.startDate?.toDate?.() || trip.startDate)} - {formatDate(trip.endDate?.toDate?.() || trip.endDate)}
-        </Paragraph>
+        <View style={styles.dateContainer}>
+          <Chip icon="calendar" style={styles.dateChip}>
+            {formatDate(trip.startDate?.toDate?.() || trip.startDate)}
+          </Chip>
+          <Text style={styles.dateSeparator}>→</Text>
+          <Chip icon="calendar" style={styles.dateChip}>
+            {formatDate(trip.endDate?.toDate?.() || trip.endDate)}
+          </Chip>
+        </View>
         
         <Paragraph style={styles.tripDuration}>
-          ⏱️ Duração: {calculateTripDuration(trip.startDate?.toDate?.() || trip.startDate, trip.endDate?.toDate?.() || trip.endDate)}
+          ⏱️ Duração: {calculateTripDuration(trip.startDate?.toDate?.() || trip.startDate, trip.endDate?.toDate?.() || trip.endDate)} dias
         </Paragraph>
         
         {trip.description && (
           <Paragraph style={styles.tripDescription}>
-            📝 {trip.description}
+            {trip.description}
           </Paragraph>
         )}
         
+        <Divider style={styles.cardDivider} />
+
         <View style={styles.tripActions}>
           <Button 
             mode="outlined" 
@@ -281,8 +291,9 @@ const TripListScreen = ({ navigation }) => {
               tripName: trip.name 
             })}
             style={styles.actionButton}
+            icon="eye"
           >
-            Ver Detalhes
+            Detalhes
           </Button>
           
           {!trip.isActive && (
@@ -290,6 +301,7 @@ const TripListScreen = ({ navigation }) => {
               mode="contained" 
               onPress={() => handleActivateTrip(trip)}
               style={styles.actionButton}
+              icon="check"
             >
               Ativar
             </Button>
@@ -349,15 +361,23 @@ const TripListScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {trips.length === 0 ? (
           <Card style={styles.emptyCard}>
             <Card.Content style={styles.emptyContent}>
-              <Title>✈️ Nenhuma Viagem Encontrada</Title>
+              <Title style={styles.emptyTitle}>✈️ Nenhuma Viagem</Title>
               <Paragraph style={styles.emptyText}>
-                Crie sua primeira viagem para começar a controlar seus gastos!
+                Crie sua primeira viagem para começar a gerenciar seus gastos.
               </Paragraph>
+              <Button
+                mode="contained"
+                icon="plus"
+                onPress={handleOpenCreateDialog}
+                style={{ marginTop: 16 }}
+              >
+                Criar Viagem
+              </Button>
             </Card.Content>
           </Card>
         ) : (
@@ -370,27 +390,29 @@ const TripListScreen = ({ navigation }) => {
       </ScrollView>
 
       {/* Quick action FABs for expense and recurring */}
-      <FAB
-        style={[styles.fabSecondary, { bottom: 96 }]}
-        small
-        icon="cash-plus"
-        label="Gasto"
-        onPress={navigateToQuickExpense}
-      />
-
-      <FAB
-        style={[styles.fabSecondary, { bottom: 160 }]}
-        small
-        icon="refresh"
-        label="Recorrente"
-        onPress={navigateToRecurring}
-      />
-
-      <FAB
-        style={styles.fab}
-        icon="plus"
-        label="Nova Viagem"
-        onPress={handleOpenCreateDialog}
+      <FAB.Group
+        open={fabOpen}
+        icon={fabOpen ? 'close' : 'plus'}
+        actions={[
+          {
+            icon: 'cash-plus',
+            label: 'Gasto Rápido',
+            onPress: navigateToQuickExpense,
+          },
+          {
+            icon: 'refresh',
+            label: 'Gasto Recorrente',
+            onPress: navigateToRecurring,
+          },
+          {
+            icon: 'plus-circle',
+            label: 'Nova Viagem',
+            onPress: handleOpenCreateDialog,
+          },
+        ]}
+        onStateChange={({ open }) => setFabOpen(open)}
+        style={styles.fabGroup}
+        fabStyle={{ backgroundColor: theme.colors.primary }}
       />
 
       <Portal>
@@ -607,87 +629,104 @@ const TripListScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   scrollView: {
     flex: 1,
+    paddingTop: 8,
   },
   tripCard: {
-    margin: 16,
-    marginBottom: 8,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 16,
     elevation: 2,
   },
   activeTrip: {
     borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
+    borderLeftColor: '#FFC107', // Amarelo
   },
   tripHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   tripTitle: {
     flex: 1,
-    fontSize: 18,
+    fontSize: 22,
+    fontWeight: 'bold',
   },
   activeChip: {
+    backgroundColor: '#E8F5E9',
+  },
+  activeChipText: {
     color: '#4CAF50',
     fontWeight: 'bold',
   },
   tripBudget: {
     fontSize: 16,
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 12,
+    opacity: 0.9,
   },
-  tripDates: {
-    fontSize: 14,
-    opacity: 0.7,
-    marginBottom: 4,
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  dateChip: {
+    backgroundColor: '#f0f0f0',
+  },
+  dateSeparator: {
+    fontWeight: 'bold',
   },
   tripDuration: {
     fontSize: 14,
     opacity: 0.8,
-    marginBottom: 8,
+    marginBottom: 12,
     fontWeight: '500',
-    color: '#4CAF50',
   },
   tripDescription: {
     fontSize: 14,
     fontStyle: 'italic',
-    marginBottom: 12,
+    marginBottom: 16,
+    opacity: 0.7,
+  },
+  cardDivider: {
+    marginVertical: 8,
   },
   tripActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
+    gap: 8,
     marginTop: 8,
   },
   actionButton: {
-    flex: 1,
-    marginHorizontal: 4,
+    borderRadius: 10,
   },
   emptyCard: {
     margin: 16,
     elevation: 2,
+    borderRadius: 16,
   },
   emptyContent: {
     alignItems: 'center',
     padding: 20,
   },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
   emptyText: {
     textAlign: 'center',
-    marginTop: 8,
     opacity: 0.7,
   },
-  fab: {
+  fabGroup: {
     position: 'absolute',
     margin: 16,
     right: 0,
     bottom: 0,
-  },
-  fabSecondary: {
-    position: 'absolute',
-    right: 16,
   },
   bottomSpacer: {
     height: 80,

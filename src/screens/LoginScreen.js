@@ -7,11 +7,13 @@ import {
   TextInput, 
   Button, 
   Snackbar,
-  Divider
+  useTheme,
+  Text
 } from 'react-native-paper';
 import { authService } from '../services/authService';
 
 const LoginScreen = ({ navigation }) => {
+  const theme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,66 +22,55 @@ const LoginScreen = ({ navigation }) => {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      setSnackbar({ visible: true, message: 'Preencha todos os campos' });
+      setSnackbar({ visible: true, message: 'Preencha e-mail e senha.' });
       return;
     }
-
     setLoading(true);
     const result = await authService.login(email.trim(), password);
-    
-    if (result.success) {
-      // O AuthContext vai detectar a mudança e navegar automaticamente
-      console.log('Login realizado com sucesso!');
-    } else {
+    if (!result.success) {
       const errorMessage = authService.getErrorMessage(result.error);
       setSnackbar({ visible: true, message: errorMessage });
+      setLoading(false);
     }
-    
-    setLoading(false);
+    // On success, AuthContext handles navigation
   };
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
-      setSnackbar({ visible: true, message: 'Digite seu email primeiro' });
+      setSnackbar({ visible: true, message: 'Digite seu e-mail para recuperar a senha.' });
       return;
     }
-
     setLoading(true);
     const result = await authService.resetPassword(email.trim());
-    
-    if (result.success) {
-      setSnackbar({ 
-        visible: true, 
-        message: 'Email de recuperação enviado! Verifique sua caixa de entrada.' 
-      });
-    } else {
-      const errorMessage = authService.getErrorMessage(result.error);
-      setSnackbar({ visible: true, message: errorMessage });
-    }
-    
+    const message = result.success 
+      ? 'E-mail de recuperação enviado! Verifique sua caixa de entrada.'
+      : authService.getErrorMessage(result.error);
+    setSnackbar({ visible: true, message });
     setLoading(false);
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: theme.colors.background }]} 
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.header}>
         <Image 
           source={require('../../assets/logo.jpg')} 
           style={styles.logo}
           resizeMode="contain"
         />
-        <Title style={styles.title}>NomadGuide</Title>
+        <Title style={[styles.title, { color: theme.colors.primary }]}>NomadGuide</Title>
         <Paragraph style={styles.subtitle}>
-          Seu companheiro de viagem para finanças e medicamentos
+          Suas viagens, suas finanças, seu controle.
         </Paragraph>
       </View>
 
       <Card style={styles.card}>
         <Card.Content>
-          <Title style={styles.cardTitle}>Entrar</Title>
-          
           <TextInput
-            label="📧 Email"
+            label="E-mail"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -87,16 +78,18 @@ const LoginScreen = ({ navigation }) => {
             mode="outlined"
             style={styles.input}
             disabled={loading}
+            left={<TextInput.Icon icon="at" />}
           />
 
           <TextInput
-            label="🔒 Senha"
+            label="Senha"
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
             mode="outlined"
             style={styles.input}
             disabled={loading}
+            left={<TextInput.Icon icon="lock-outline" />}
             right={
               <TextInput.Icon 
                 icon={showPassword ? "eye-off" : "eye"} 
@@ -110,32 +103,30 @@ const LoginScreen = ({ navigation }) => {
             onPress={handleLogin}
             loading={loading}
             disabled={loading}
-            style={styles.loginButton}
+            style={styles.button}
             contentStyle={styles.buttonContent}
+            labelStyle={styles.buttonLabel}
           >
             Entrar
           </Button>
 
-          <Button
-            mode="text"
-            onPress={handleForgotPassword}
-            disabled={loading}
-            style={styles.forgotButton}
-          >
-            Esqueci minha senha
-          </Button>
-
-          <Divider style={styles.divider} />
-
-          <Button
-            mode="outlined"
-            onPress={() => navigation.navigate('Register')}
-            disabled={loading}
-            style={styles.registerButton}
-            contentStyle={styles.buttonContent}
-          >
-            Criar nova conta
-          </Button>
+          <View style={styles.linkContainer}>
+            <Button
+              mode="text"
+              onPress={() => navigation.navigate('Register')}
+              disabled={loading}
+            >
+              Criar conta
+            </Button>
+            <Text>|</Text>
+            <Button
+              mode="text"
+              onPress={handleForgotPassword}
+              disabled={loading}
+            >
+              Esqueci a senha
+            </Button>
+          </View>
         </Card.Content>
       </Card>
 
@@ -143,8 +134,9 @@ const LoginScreen = ({ navigation }) => {
         visible={snackbar.visible}
         onDismiss={() => setSnackbar({ visible: false, message: '' })}
         duration={4000}
+        style={{ backgroundColor: theme.colors.errorContainer }}
       >
-        {snackbar.message}
+        <Text style={{ color: theme.colors.onErrorContainer }}>{snackbar.message}</Text>
       </Snackbar>
     </ScrollView>
   );
@@ -153,61 +145,55 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   content: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 16,
+    padding: 24,
   },
   header: {
     alignItems: 'center',
     marginBottom: 32,
   },
   logo: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 24,
     marginBottom: 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#6200ea',
-    marginBottom: 8,
   },
   subtitle: {
     textAlign: 'center',
-    color: '#666',
-    paddingHorizontal: 16,
+    opacity: 0.7,
+    marginTop: 4,
+    fontSize: 16,
   },
   card: {
-    elevation: 4,
-    borderRadius: 12,
-  },
-  cardTitle: {
-    textAlign: 'center',
-    marginBottom: 24,
-    color: '#6200ea',
+    borderRadius: 16,
+    elevation: 2,
   },
   input: {
     marginBottom: 16,
   },
-  loginButton: {
-    marginTop: 8,
-    marginBottom: 16,
+  button: {
+    marginTop: 16,
+    borderRadius: 12,
   },
   buttonContent: {
     paddingVertical: 8,
   },
-  forgotButton: {
-    marginBottom: 16,
+  buttonLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
-  divider: {
-    marginVertical: 16,
-  },
-  registerButton: {
-    marginTop: 8,
+  linkContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    marginTop: 24,
   },
 });
 

@@ -170,6 +170,17 @@ export const deleteTransaction = async (userId, transactionId) => {
   }
 };
 
+export const deleteRecurringTransaction = async (userId, recurringTransactionId) => {
+  try {
+    const recurringTransactionRef = doc(db, 'users', userId, 'recurringTransactions', recurringTransactionId);
+    await deleteDoc(recurringTransactionRef);
+    console.log('✅ Recurring transaction deleted successfully');
+  } catch (error) {
+    console.error('❌ Error deleting recurring transaction:', error);
+    throw error;
+  }
+};
+
 // Category Management
 export const createCategory = async (userId, categoryData) => {
   try {

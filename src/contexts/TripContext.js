@@ -12,6 +12,7 @@ import {
   addRecurringTransaction as addRecurringTransactionService,
   updateTransaction as updateTransactionService,
   deleteTransaction as deleteTransactionService,
+  deleteRecurringTransaction as deleteRecurringTransactionService, // Import new service
   initializeDefaultCategories,
   subscribeToRecurringTransactions,
   updateRecurringTransaction
@@ -173,6 +174,11 @@ export const TripProvider = ({ children }) => {
     return await deleteTransactionService(userId, transactionId);
   }, [userId]);
 
+  const deleteRecurringTransaction = useCallback(async (recurringTransactionId) => {
+    if (!userId) throw new Error('User not authenticated');
+    return await deleteRecurringTransactionService(userId, recurringTransactionId);
+  }, [userId]);
+
   // Helper functions
   const getActiveTrip = useCallback(() => {
     return trips.find(trip => trip.isActive) || null;
@@ -215,13 +221,16 @@ export const TripProvider = ({ children }) => {
     const trip = trips.find(t => t.id === tripId);
     if (!trip) return 0;
 
-    // Effective: budget minus executed transactions
+    const tripCurrency = trip.defaultCurrency || 'USD';
+
+    // Saldo efetivo: orçamento menos transações executadas
     const base = (trip.budget || 0) - transactions
       .filter(t => t.tripId === tripId)
       .reduce((sum, t) => sum + (t.type === 'expense' ? (t.amount || 0) : -(t.amount || 0)), 0);
 
-    // Projected impact from recurring transactions
-    const today = new Date();
+    // Projeção deve considerar TODAS as ocorrências dentro do período planejado
+    const tripEnd = trip.endDate?.toDate?.() || (trip.endDate ? new Date(trip.endDate) : null);
+
     const recurrences = recurringTransactions.filter(r => r.tripId === tripId);
 
     const projectImpact = recurrences.reduce((acc, r) => {
@@ -229,10 +238,12 @@ export const TripProvider = ({ children }) => {
       const end = r.endDate?.toDate?.() || new Date(r.endDate);
       if (!start || !end || start > end) return acc;
 
-      // count occurrences up to min(today, end)
-      const limit = today < end ? today : end;
+      // Limite de projeção: fim da recorrência OU fim da viagem (o que vier primeiro)
+      const limit = tripEnd ? (end < tripEnd ? end : tripEnd) : end;
+      if (start > limit) return acc; // fora do período
+
       const msPerDay = 24 * 60 * 60 * 1000;
-      const diffDays = Math.floor((limit - start) / msPerDay);
+      const diffDays = Math.floor((limit.setHours(0,0,0,0) - start.setHours(0,0,0,0)) / msPerDay);
 
       const freq = r.frequency; // daily, weekly, monthly, quarterly, biannual
       let occurrences = 0;
@@ -248,12 +259,13 @@ export const TripProvider = ({ children }) => {
         occurrences = Math.floor(diffDays / 180) + 1;
       }
 
-      const amount = r.amount || 0;
+      // Use valor na moeda da viagem se disponível, senão fallback ao amount original
+      const amountTrip = typeof r.amountInTripCurrency === 'number' ? r.amountInTripCurrency : (r.amount || 0);
       const sign = r.type === 'expense' ? 1 : -1;
-      return acc + (occurrences * amount * sign);
+      return acc + (occurrences * amountTrip * sign);
     }, 0);
 
-    return base - projectImpact; // subtract expenses, add incomes
+    return base - projectImpact; // despesas diminuem, receitas aumentam
   }, [trips, transactions, recurringTransactions]);
 
   // Confirm a due occurrence: creates a normal transaction and updates lastAppliedDate
@@ -303,6 +315,7 @@ export const TripProvider = ({ children }) => {
     addRecurringTransaction,
     updateTransaction,
     deleteTransaction,
+    deleteRecurringTransaction, // Export new function
 
     // Recurring confirmation
     confirmRecurringOccurrence,

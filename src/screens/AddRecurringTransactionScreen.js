@@ -13,7 +13,8 @@ import {
   Text,
   Chip,
   Portal,
-  Dialog
+  Dialog,
+  useTheme
 } from 'react-native-paper';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useTripContext } from '../contexts/TripContext';
@@ -23,6 +24,7 @@ const AddRecurringTransactionScreen = ({ navigation, route }) => {
   const { tripId } = route.params || {};
   const { categories, addRecurringTransaction, trips } = useTripContext();
   const { getSupportedCurrencies, formatCurrency: formatCurrencyValue, convertCurrency } = useCurrencyContext();
+  const theme = useTheme();
   
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -89,6 +91,25 @@ const AddRecurringTransactionScreen = ({ navigation, route }) => {
     { value: 'quarterly', label: 'Trimestral' },
     { value: 'biannual', label: 'Semestral' }
   ];
+
+  // Opções de categorias para RECEITAS (chips)
+  const incomeCategoryOptions = [
+    'Salário',
+    'Reembolso',
+    'Freelance',
+    'Juros',
+    'Investimentos',
+    'Outros'
+  ];
+
+  // Limpar seleção de categoria ao alternar tipo
+  useEffect(() => {
+    if (type === 'income') {
+      setSelectedCategoryId('');
+    } else {
+      setSelectedCategoryName('');
+    }
+  }, [type]);
 
   const handleStartDateChange = (event, selectedDate) => {
     // iOS inline picker callback
@@ -215,14 +236,30 @@ const AddRecurringTransactionScreen = ({ navigation, route }) => {
     setLoading(true);
 
     try {
+      // Calcular valor na moeda da viagem para projeção
+      let amountInTripCurrency = numericAmount;
+      const tripCurrency = trip?.defaultCurrency || 'USD';
+      if (selectedCurrency && tripCurrency && selectedCurrency !== tripCurrency) {
+        try {
+          amountInTripCurrency = await convertCurrency(numericAmount, selectedCurrency, tripCurrency);
+        } catch (e) {
+          console.warn('Falha ao converter para moeda da viagem, usando valor original para projeção.');
+          amountInTripCurrency = numericAmount;
+        }
+      }
+
       const recurringTransactionData = {
         tripId,
+        // Guardamos o valor original e moeda original para exibição e para a transação efetiva ao confirmar
         amount: numericAmount,
+        currency: selectedCurrency,
+        // E também o valor convertido para a moeda da viagem para cálculo do saldo projetado
+        amountInTripCurrency,
+        tripCurrency,
         description: description?.trim?.() || '',
         type,
         categoryId,
         categoryName,
-        currency: selectedCurrency,
         frequency,
         startDate,
         endDate,
@@ -246,305 +283,325 @@ const AddRecurringTransactionScreen = ({ navigation, route }) => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>🔄 Nova Transação Recorrente</Title>
-          {trip && (
-            <Paragraph style={styles.tripInfo}>📍 Viagem: {trip.name}</Paragraph>
-          )}
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <Card style={styles.card}>
+          <Card.Content>
+            <Title style={styles.title}>🔄 Nova Transação Recorrente</Title>
+            {trip && (
+              <Chip icon="briefcase" style={styles.tripChip}>
+                Viagem: {trip.name}
+              </Chip>
+            )}
 
-          <Divider style={styles.divider} />
+            <Divider style={styles.divider} />
 
-          <Text style={styles.sectionTitle}>Tipo de Transação</Text>
-          <View style={styles.typeRow}>
-            <Chip
-              selected={type === 'expense'}
-              onPress={() => setType('expense')}
-              style={[styles.typeChip, type === 'expense' && styles.typeChipSelected]}
-            >
-              💸 Gasto
-            </Chip>
-            <Chip
-              selected={type === 'income'}
-              onPress={() => setType('income')}
-              style={[styles.typeChip, type === 'income' && styles.typeChipSelected]}
-            >
-              💰 Receita
-            </Chip>
-          </View>
-
-          <Divider style={styles.divider} />
-
-          <TextInput
-            label="Valor"
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="decimal-pad"
-            mode="outlined"
-            style={styles.input}
-            left={<TextInput.Icon icon="currency-usd" />}
-          />
-
-          {/* Currency selection via Dialog (stable) */}
-          <Button 
-            mode="outlined"
-            onPress={() => setShowCurrencyDialog(true)}
-            style={styles.currencyButton}
-            icon="currency-usd"
-          >
-            {(() => {
-              const currency = getSupportedCurrencies().find(c => c.code === selectedCurrency);
-              return `${currency?.flag || ''} ${currency?.code || 'USD'}`;
-            })()}
-          </Button>
-          <Portal>
-            <Dialog visible={showCurrencyDialog} onDismiss={() => setShowCurrencyDialog(false)}>
-              <Dialog.Title>Selecionar Moeda</Dialog.Title>
-              <Dialog.ScrollArea>
-                <ScrollView style={{ maxHeight: 320 }}>
-                  {getSupportedCurrencies().map((currency) => (
-                    <List.Item
-                      key={currency.code}
-                      title={`${currency.flag} ${currency.code} - ${currency.name}`}
-                      right={() => (
-                        <RadioButton
-                          value={currency.code}
-                          status={selectedCurrency === currency.code ? 'checked' : 'unchecked'}
-                          onPress={() => {
-                            setSelectedCurrency(currency.code);
-                            setShowCurrencyDialog(false);
-                          }}
-                        />
-                      )}
-                      onPress={() => {
-                        setSelectedCurrency(currency.code);
-                        setShowCurrencyDialog(false);
-                      }}
-                    />
-                  ))}
-                </ScrollView>
-              </Dialog.ScrollArea>
-              <Dialog.Actions>
-                <Button onPress={() => setShowCurrencyDialog(false)}>Fechar</Button>
-              </Dialog.Actions>
-            </Dialog>
-          </Portal>
-
-          {convertedAmount && (
-            <Chip icon="swap-horizontal" style={styles.conversionChip}>
-              ≈ {formatCurrencyValue(convertedAmount, trip?.defaultCurrency || 'USD')}
-            </Chip>
-          )}
-
-          <TextInput
-            label="Descrição (opcional)"
-            value={description}
-            onChangeText={setDescription}
-            mode="outlined"
-            style={styles.input}
-            left={<TextInput.Icon icon="text" />}
-            multiline
-          />
-
-          <Divider style={styles.divider} />
-
-          {/* Frequency selection via Dialog to avoid overflow */}
-          <Text style={styles.sectionTitle}>Frequência</Text>
-          <Button mode="outlined" onPress={() => setShowFrequencyDialog(true)} style={styles.frequencyButton} icon="calendar-sync">
-            {frequencyOptions.find(f => f.value === frequency)?.label}
-          </Button>
-          <Portal>
-            <Dialog visible={showFrequencyDialog} onDismiss={() => setShowFrequencyDialog(false)}>
-              <Dialog.Title>Selecionar Frequência</Dialog.Title>
-              <Dialog.ScrollArea>
-                <ScrollView style={{ maxHeight: 320 }}>
-                  {frequencyOptions.map(opt => (
-                    <List.Item
-                      key={opt.value}
-                      title={opt.label}
-                      onPress={() => { setFrequency(opt.value); setShowFrequencyDialog(false); }}
-                      right={() => (
-                        <RadioButton
-                          value={opt.value}
-                          status={frequency === opt.value ? 'checked' : 'unchecked'}
-                          onPress={() => { setFrequency(opt.value); setShowFrequencyDialog(false); }}
-                        />
-                      )}
-                    />
-                  ))}
-                </ScrollView>
-              </Dialog.ScrollArea>
-              <Dialog.Actions>
-                <Button onPress={() => setShowFrequencyDialog(false)}>Fechar</Button>
-              </Dialog.Actions>
-            </Dialog>
-          </Portal>
-
-          <Divider style={styles.divider} />
-
-          {/* Date Selection */}
-          <Text style={styles.sectionTitle}>Período</Text>
-          <View style={styles.dateSection}>
-            <View style={styles.dateRow}>
-              <Button 
-                mode="outlined" 
-                onPress={() => Platform.OS === 'android' ? openAndroidStartPicker() : setShowStartDatePicker(true)}
-                style={styles.dateButton}
-                icon="calendar"
+            <Text style={styles.sectionTitle}>Tipo de Transação</Text>
+            <View style={styles.typeRow}>
+              <Chip
+                selected={type === 'expense'}
+                onPress={() => setType('expense')}
+                style={[styles.typeChip, type === 'expense' && styles.typeChipSelected]}
+                icon="minus-circle"
               >
-                Início: {formatDate(startDate)}
-              </Button>
-              
-              <Button 
-                mode="text" 
-                onPress={setStartDateToToday}
-                style={styles.shortcutButton}
+                Gasto
+              </Chip>
+              <Chip
+                selected={type === 'income'}
+                onPress={() => setType('income')}
+                style={[styles.typeChip, type === 'income' && styles.typeChipSelected]}
+                icon="plus-circle"
               >
-                Hoje
-              </Button>
+                Receita
+              </Chip>
             </View>
+
+            <Divider style={styles.divider} />
+
+            <Text style={styles.sectionTitle}>Detalhes</Text>
+            <TextInput
+              label="Valor"
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="decimal-pad"
+              mode="outlined"
+              style={styles.input}
+              left={<TextInput.Icon icon="cash" />}
+            />
+
+            <Button 
+              mode="outlined"
+              onPress={() => setShowCurrencyDialog(true)}
+              style={styles.currencyButton}
+              icon="currency-usd"
+            >
+              {(() => {
+                const currency = getSupportedCurrencies().find(c => c.code === selectedCurrency);
+                return `${currency?.flag || ''} ${currency?.code || 'USD'}`;
+              })()}
+            </Button>
+
+            {convertedAmount && (
+              <Chip icon="swap-horizontal" style={styles.conversionChip}>
+                ≈ {formatCurrencyValue(convertedAmount, trip?.defaultCurrency || 'USD')}
+              </Chip>
+            )}
+
+            <TextInput
+              label="Descrição (opcional)"
+              value={description}
+              onChangeText={setDescription}
+              mode="outlined"
+              style={styles.input}
+              left={<TextInput.Icon icon="text" />}
+            />
+
+            <Divider style={styles.divider} />
+
+            <Text style={styles.sectionTitle}>Frequência</Text>
+            <Button mode="outlined" onPress={() => setShowFrequencyDialog(true)} style={styles.frequencyButton} icon="calendar-sync">
+              {frequencyOptions.find(f => f.value === frequency)?.label}
+            </Button>
             
-            <View style={styles.dateRow}>
-              <Button 
-                mode="outlined" 
-                onPress={() => Platform.OS === 'android' ? openAndroidEndPicker() : setShowEndDatePicker(true)}
-                style={styles.dateButton}
-                icon="calendar"
-              >
-                Fim: {formatDate(endDate)}
-              </Button>
-              
-              <Button 
-                mode="text" 
-                onPress={setEndDateToTripEnd}
-                style={styles.shortcutButton}
-                disabled={!trip?.endDate}
-              >
-                Fim da viagem
-              </Button>
-            </View>
-          </View>
+            <Divider style={styles.divider} />
 
-          {/* iOS inline pickers */}
-          {Platform.OS === 'ios' && showStartDatePicker && (
-            <DateTimePicker
-              value={startDate || new Date()}
-              mode="date"
-              display="spinner"
-              onChange={handleStartDateChange}
-            />
-          )}
-          {Platform.OS === 'ios' && showEndDatePicker && (
-            <DateTimePicker
-              value={endDate || startDate || new Date()}
-              mode="date"
-              display="spinner"
-              onChange={handleEndDateChange}
-              minimumDate={startDate}
-            />
-          )}
-
-          {/* Summary */}
-          {startDate && endDate && amount && (
-            <Card style={styles.summaryCard}>
-              <Card.Content>
-                <Title style={styles.summaryTitle}>📊 Resumo</Title>
-                <Text style={styles.summaryText}>
-                  • Frequência: {frequencyOptions.find(f => f.value === frequency)?.label}
-                </Text>
-                <Text style={styles.summaryText}>
-                  • Ocorrências: {calculateTotalOccurrences()}x
-                </Text>
-                <Text style={styles.summaryText}>
-                  • Valor total: {formatCurrencyValue(calculateTotalAmount(), selectedCurrency)}
-                </Text>
-                <Text style={styles.impactText}>
-                  ⚠️ Impacta apenas o saldo projetado
-                </Text>
-              </Card.Content>
-            </Card>
-          )}
-
-          <Divider style={styles.divider} />
-
-          {/* Category Selection */}
-          <Text style={styles.sectionTitle}>Categoria (opcional)</Text>
-          {type === 'income' ? (
-            <View style={styles.chipsContainer}>
-              {incomeCategoryOptions.map(name => (
-                <Chip
-                  key={name}
-                  selected={selectedCategoryName === name}
-                  onPress={() => setSelectedCategoryName(prev => prev === name ? '' : name)}
-                  style={[styles.categoryChip, selectedCategoryName === name && styles.categoryChipSelected]}
+            <Text style={styles.sectionTitle}>Período</Text>
+            <View style={styles.dateSection}>
+              <View style={styles.dateRow}>
+                <Button 
+                  mode="outlined" 
+                  onPress={() => Platform.OS === 'android' ? openAndroidStartPicker() : setShowStartDatePicker(true)}
+                  style={styles.dateButton}
+                  icon="calendar-start"
                 >
-                  {name}
+                  Início: {formatDate(startDate)}
+                </Button>
+                <Button 
+                  mode="text" 
+                  onPress={setStartDateToToday}
+                  style={styles.shortcutButton}
+                >
+                  Hoje
+                </Button>
+              </View>
+              
+              <View style={styles.dateRow}>
+                <Button 
+                  mode="outlined" 
+                  onPress={() => Platform.OS === 'android' ? openAndroidEndPicker() : setShowEndDatePicker(true)}
+                  style={styles.dateButton}
+                  icon="calendar-end"
+                >
+                  Fim: {formatDate(endDate)}
+                </Button>
+                <Button 
+                  mode="text" 
+                  onPress={setEndDateToTripEnd}
+                  style={styles.shortcutButton}
+                  disabled={!trip?.endDate}
+                >
+                  Fim da viagem
+                </Button>
+              </View>
+            </View>
+
+            {Platform.OS === 'ios' && showStartDatePicker && (
+              <DateTimePicker
+                value={startDate || new Date()}
+                mode="date"
+                display="spinner"
+                onChange={handleStartDateChange}
+              />
+            )}
+            {Platform.OS === 'ios' && showEndDatePicker && (
+              <DateTimePicker
+                value={endDate || startDate || new Date()}
+                mode="date"
+                display="spinner"
+                onChange={handleEndDateChange}
+                minimumDate={startDate}
+              />
+            )}
+
+            {startDate && endDate && amount && (
+              <Card style={styles.summaryCard}>
+                <Card.Content>
+                  <Title style={styles.summaryTitle}>📊 Resumo</Title>
+                  <Text style={styles.summaryText}>
+                    • Frequência: {frequencyOptions.find(f => f.value === frequency)?.label}
+                  </Text>
+                  <Text style={styles.summaryText}>
+                    • Ocorrências: {calculateTotalOccurrences()}x
+                  </Text>
+                  <Text style={styles.summaryText}>
+                    • Valor total: {(() => {
+                      const numAmount = parseFloat(amount.replace(',', '.'));
+                      const occ = calculateTotalOccurrences();
+                      const tripCurrency = trip?.defaultCurrency || selectedCurrency;
+                      if (!isNaN(numAmount) && tripCurrency && selectedCurrency && selectedCurrency !== tripCurrency) {
+                        return `${formatCurrencyValue(numAmount * occ, selectedCurrency)}  (≈ ${formatCurrencyValue((convertedAmount || numAmount) * occ, tripCurrency)})`;
+                      }
+                      return formatCurrencyValue(numAmount * occ, selectedCurrency);
+                    })()}
+                  </Text>
+                  <Chip icon="information-outline" style={styles.impactChip}>
+                    Impacta apenas o saldo projetado
+                  </Chip>
+                </Card.Content>
+              </Card>
+            )}
+
+            <Divider style={styles.divider} />
+
+            <Text style={styles.sectionTitle}>Categoria (opcional)</Text>
+            <View style={styles.chipsContainer}>
+              {(type === 'income' ? incomeCategoryOptions.map(name => ({ name, id: name })) : categories).map(cat => (
+                <Chip
+                  key={cat.id || cat.name}
+                  selected={type === 'income' ? selectedCategoryName === cat.name : selectedCategoryId === cat.id}
+                  onPress={() => {
+                    if (type === 'income') {
+                      setSelectedCategoryName(prev => prev === cat.name ? '' : cat.name);
+                    } else {
+                      setSelectedCategoryId(prev => prev === cat.id ? '' : cat.id);
+                    }
+                  }}
+                  style={[styles.categoryChip, (type === 'income' ? selectedCategoryName === cat.name : selectedCategoryId === cat.id) && styles.categoryChipSelected]}
+                >
+                  {cat.name}
                 </Chip>
               ))}
             </View>
-          ) : (
-            categories && categories.map((category) => (
-              <List.Item
-                key={category.id}
-                title={`${category.icon} ${category.name}`}
-                onPress={() => setSelectedCategoryId(prev => prev === category.id ? '' : category.id)}
-                left={() => (
-                  <RadioButton
-                    value={category.id}
-                    status={selectedCategoryId === category.id ? 'checked' : 'unchecked'}
-                  />
-                )}
-              />
-            ))
-          )}
+          </Card.Content>
+        </Card>
 
+        <View style={styles.bottomActions}>
+          <Button
+            mode="text"
+            onPress={() => navigation.goBack()}
+            style={styles.actionButton}
+          >
+            Cancelar
+          </Button>
           <Button
             mode="contained"
             onPress={handleSubmit}
             loading={loading}
             disabled={loading}
-            style={styles.submitButton}
+            style={styles.actionButton}
             icon="check"
           >
-            Adicionar Transação Recorrente
+            Adicionar
           </Button>
-        </Card.Content>
-      </Card>
-      
-      <Snackbar
-        visible={showSnackbar}
-        onDismiss={() => setShowSnackbar(false)}
-        duration={3000}
-      >
-        {snackbarMessage}
-      </Snackbar>
-    </ScrollView>
+        </View>
+        
+        {/* Dialogs */}
+        <Portal>
+          <Dialog visible={showCurrencyDialog} onDismiss={() => setShowCurrencyDialog(false)}>
+            <Dialog.Title>Selecionar Moeda</Dialog.Title>
+            <Dialog.ScrollArea>
+              <ScrollView style={{ maxHeight: 320 }}>
+                {getSupportedCurrencies().map((currency) => (
+                  <List.Item
+                    key={currency.code}
+                    title={`${currency.flag} ${currency.code} - ${currency.name}`}
+                    right={() => (
+                      <RadioButton
+                        value={currency.code}
+                        status={selectedCurrency === currency.code ? 'checked' : 'unchecked'}
+                        onPress={() => {
+                          setSelectedCurrency(currency.code);
+                          setShowCurrencyDialog(false);
+                        }}
+                      />
+                    )}
+                    onPress={() => {
+                      setSelectedCurrency(currency.code);
+                      setShowCurrencyDialog(false);
+                    }}
+                  />
+                ))}
+              </ScrollView>
+            </Dialog.ScrollArea>
+            <Dialog.Actions>
+              <Button onPress={() => setShowCurrencyDialog(false)}>Fechar</Button>
+            </Dialog.Actions>
+          </Dialog>
+
+          <Dialog visible={showFrequencyDialog} onDismiss={() => setShowFrequencyDialog(false)}>
+            <Dialog.Title>Selecionar Frequência</Dialog.Title>
+            <Dialog.ScrollArea>
+              <ScrollView style={{ maxHeight: 320 }}>
+                {frequencyOptions.map(opt => (
+                  <List.Item
+                    key={opt.value}
+                    title={opt.label}
+                    onPress={() => { setFrequency(opt.value); setShowFrequencyDialog(false); }}
+                    right={() => (
+                      <RadioButton
+                        value={opt.value}
+                        status={frequency === opt.value ? 'checked' : 'unchecked'}
+                        onPress={() => { setFrequency(opt.value); setShowFrequencyDialog(false); }}
+                      />
+                    )}
+                  />
+                ))}
+              </ScrollView>
+            </Dialog.ScrollArea>
+            <Dialog.Actions>
+              <Button onPress={() => setShowFrequencyDialog(false)}>Fechar</Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
+        
+        <Snackbar
+          visible={showSnackbar}
+          onDismiss={() => setShowSnackbar(false)}
+          duration={3000}
+          style={{ bottom: 80 }}
+        >
+          {snackbarMessage}
+        </Snackbar>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  card: { margin: 16, elevation: 4 },
-  tripInfo: { fontSize: 16, fontWeight: '500', marginBottom: 8, color: '#2196F3' },
-  sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12, color: '#333' },
-  input: { marginBottom: 16 },
-  currencyButton: { marginBottom: 12, alignSelf: 'flex-start' },
-  conversionChip: { alignSelf: 'flex-start', marginBottom: 12 },
+  container: { flex: 1 },
+  scrollView: { flex: 1, paddingTop: 8 },
+  card: { margin: 16, borderRadius: 16, elevation: 2 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
+  tripChip: { alignSelf: 'flex-start', marginBottom: 8 },
+  sectionTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12 },
+  input: { marginBottom: 12 },
+  currencyButton: { alignSelf: 'flex-start', marginBottom: 8 },
+  conversionChip: { alignSelf: 'flex-start', marginBottom: 16 },
   typeRow: { flexDirection: 'row', gap: 8 },
-  typeChip: { marginBottom: 8 },
+  typeChip: { flex: 1, paddingVertical: 4 },
   typeChipSelected: { backgroundColor: '#E3F2FD' },
   frequencyButton: { alignSelf: 'flex-start' },
   dateSection: { marginBottom: 16 },
   dateRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   dateButton: { flex: 1, marginRight: 8 },
   shortcutButton: { paddingHorizontal: 8 },
-  summaryCard: { backgroundColor: '#E3F2FD', marginVertical: 16 },
+  summaryCard: { backgroundColor: '#f5f5f5', marginVertical: 16, borderRadius: 12 },
   summaryTitle: { fontSize: 18, marginBottom: 8 },
-  summaryText: { fontSize: 14, marginBottom: 4 },
-  impactText: { fontSize: 12, fontStyle: 'italic', color: '#FF9800', marginTop: 8 },
-  submitButton: { marginTop: 24, paddingVertical: 8 },
-  divider: { marginVertical: 16 },
+  summaryText: { fontSize: 14, marginBottom: 4, opacity: 0.8 },
+  impactChip: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: '#FFF8E1' },
+  bottomActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    paddingBottom: 24,
+    gap: 16,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  divider: { marginVertical: 20 },
   chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   categoryChip: { marginRight: 6, marginBottom: 6 },
   categoryChipSelected: { backgroundColor: '#E3F2FD' },

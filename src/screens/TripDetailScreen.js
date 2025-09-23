@@ -14,7 +14,8 @@ import {
   ProgressBar,
   Divider,
   Portal,
-  Dialog
+  Dialog,
+  useTheme
 } from 'react-native-paper';
 import { useTripContext } from '../contexts/TripContext';
 import { useCurrencyContext } from '../contexts/CurrencyContext';
@@ -35,6 +36,7 @@ const TripDetailScreen = ({ navigation, route }) => {
   } = useTripContext();
   
   const { formatCurrency: formatCurrencyValue } = useCurrencyContext();
+  const theme = useTheme();
   
   const [trip, setTrip] = useState(null);
   const [tripTransactions, setTripTransactions] = useState([]);
@@ -69,7 +71,7 @@ const TripDetailScreen = ({ navigation, route }) => {
         setCategoryStats(stats);
       }
     }
-  }, [tripId, trips, transactions, categories, recurringTransactions]);
+  }, [tripId, trips, transactions, categories, recurringTransactions, getTripTransactions, getTripBalance, getProjectedBalance, getTripByCategory]);
 
   const handleDeleteTransaction = (transactionId) => {
     Alert.alert(
@@ -97,10 +99,10 @@ const TripDetailScreen = ({ navigation, route }) => {
     return date.toLocaleDateString('pt-BR');
   };
 
-  const getBalanceColor = () => {
-    if (balance > 0) return '#4CAF50';
-    if (balance < 0) return '#F44336';
-    return '#757575';
+  const getBalanceColor = (value) => {
+    if (value > 0) return '#4CAF50';
+    if (value < 0) return '#F44336';
+    return theme.colors.onSurface;
   };
 
   const getBudgetProgress = () => {
@@ -108,6 +110,21 @@ const TripDetailScreen = ({ navigation, route }) => {
     const spent = Math.abs(balance - (trip.budget || 0));
     return Math.min(spent / trip.budget, 1);
   };
+
+  const getDaysRemaining = () => {
+    if (!trip?.endDate) return 0;
+    const endDate = trip.endDate?.toDate?.() || new Date(trip.endDate);
+    const today = new Date();
+    endDate.setHours(0,0,0,0);
+    today.setHours(0,0,0,0);
+    const diffMs = endDate.getTime() - today.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1; // inclusivo
+    return Math.max(0, days);
+  };
+
+  const daysRemaining = getDaysRemaining();
+  const realDaily = daysRemaining > 0 ? Math.max(0, balance / daysRemaining) : 0;
+  const projectedDaily = daysRemaining > 0 ? Math.max(0, projected / daysRemaining) : 0;
 
   const dueRecurrences = (() => {
     const today = new Date();
@@ -132,10 +149,11 @@ const TripDetailScreen = ({ navigation, route }) => {
 
   if (!trip) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Card style={styles.card}>
           <Card.Content>
-            <Text>Viagem não encontrada</Text>
+            <Title>Viagem não encontrada</Title>
+            <Paragraph>A viagem que você está procurando não foi encontrada ou foi excluída.</Paragraph>
           </Card.Content>
         </Card>
       </View>
@@ -143,44 +161,64 @@ const TripDetailScreen = ({ navigation, route }) => {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Trip Header */}
-        <Card style={styles.headerCard}>
+        <Card style={[styles.card, styles.headerCard]}>
           <Card.Content>
-            <Title>{trip.name}</Title>
-            {trip.description && (
-              <Paragraph style={styles.description}>{trip.description}</Paragraph>
-            )}
-            
-            <View style={styles.dateRow}>
-              <Text style={styles.dateText}>
-                {formatDate(trip.startDate)} - {formatDate(trip.endDate)}
-              </Text>
+            <View style={styles.headerRow}>
+              <Title style={styles.headerTitle}>{trip.name}</Title>
               {trip.isActive && (
-                <Chip icon="check-circle" style={styles.activeChip}>
+                <Chip icon="check-circle" style={styles.activeChip} textStyle={styles.activeChipText}>
                   Ativa
                 </Chip>
               )}
             </View>
+            {trip.description && (
+              <Paragraph style={styles.description}>{trip.description}</Paragraph>
+            )}
+            <Text style={styles.dateText}>
+              {formatDate(trip.startDate)} — {formatDate(trip.endDate)}
+            </Text>
           </Card.Content>
         </Card>
 
-        {/* Budget Overview */}
-        <Card style={styles.card}>
-          <Card.Title title="Orçamento" />
+        {/* Budget & Balance Overview */}
+        <Card style={[styles.card, styles.elevated]}>
           <Card.Content>
+            <View style={styles.balanceRow}>
+              <View style={[styles.balanceItem, styles.pill]}>
+                <Text style={styles.balanceLabel}>Saldo Real</Text>
+                <Text style={[styles.balanceValue, { color: getBalanceColor(balance) }]}>
+                  {formatCurrency(balance)}
+                </Text>
+              </View>
+              <View style={[styles.balanceItem, styles.pill]}>
+                <Text style={styles.balanceLabel}>Saldo Projetado</Text>
+                <Text style={[styles.balanceValue, { color: getBalanceColor(projected) }]}>
+                  {formatCurrency(projected)}
+                </Text>
+              </View>
+            </View>
+            
+            {daysRemaining > 0 && (
+              <View style={styles.balanceRow}>
+                <View style={[styles.balanceItem, styles.pillSoft]}>
+                  <Text style={styles.balanceLabel}>Diário (Real)</Text>
+                  <Text style={styles.balanceValue}>{formatCurrency(realDaily)}</Text>
+                </View>
+                <View style={[styles.balanceItem, styles.pillSoft]}>
+                  <Text style={styles.balanceLabel}>Diário (Projetado)</Text>
+                  <Text style={styles.balanceValue}>{formatCurrency(projectedDaily)}</Text>
+                </View>
+              </View>
+            )}
+
+            <Divider style={styles.divider} />
+
             <View style={styles.budgetRow}>
-              <Text style={styles.budgetLabel}>Orçamento:</Text>
+              <Text style={styles.budgetLabel}>Orçamento Total:</Text>
               <Text style={styles.budgetValue}>{formatCurrency(trip?.budget)}</Text>
-            </View>
-            <View style={styles.budgetRow}>
-              <Text style={styles.budgetLabel}>Saldo Efetivo:</Text>
-              <Text style={[styles.balanceValue]}>{formatCurrency(balance)}</Text>
-            </View>
-            <View style={styles.budgetRow}>
-              <Text style={styles.budgetLabel}>Saldo Projetado:</Text>
-              <Text style={[styles.balanceValue]}>{formatCurrency(projected)}</Text>
             </View>
           </Card.Content>
         </Card>
@@ -190,17 +228,14 @@ const TripDetailScreen = ({ navigation, route }) => {
           <Card style={styles.card}>
             <Card.Title title="Gastos por Categoria" />
             <Card.Content>
-              {categoryStats.map((stat, index) => (
-                <View key={stat.id}>
-                  <View style={styles.categoryRow}>
-                    <Text style={styles.categoryName}>{stat.name}</Text>
-                    <View style={styles.categoryStats}>
-                      <Text style={styles.categoryCount}>{stat.count} transações</Text>
-                      <Text style={styles.categoryTotal}>{formatCurrency(stat.total)}</Text>
-                    </View>
-                  </View>
-                  {index < categoryStats.length - 1 && <Divider style={styles.divider} />}
-                </View>
+              {categoryStats.map((stat) => (
+                <List.Item
+                  key={stat.id}
+                  title={`${stat.icon || '📁'} ${stat.name}`}
+                  description={`${stat.count} transações`}
+                  right={() => <Text style={styles.categoryTotal}>{formatCurrency(stat.total)}</Text>}
+                  style={styles.categoryItem}
+                />
               ))}
             </Card.Content>
           </Card>
@@ -210,15 +245,15 @@ const TripDetailScreen = ({ navigation, route }) => {
         <Card style={styles.card}>
           <Card.Title 
             title="Transações" 
-            subtitle={`${tripTransactions.length} transações`}
+            subtitle={`${tripTransactions.length} lançamentos`}
           />
           <Card.Content>
             {tripTransactions.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>Nenhuma transação encontrada</Text>
-                <Text style={styles.emptySubtext}>
-                  Toque no botão + para adicionar sua primeira transação
-                </Text>
+                <Paragraph style={styles.emptySubtext}>
+                  Toque no botão + para adicionar seu primeiro lançamento.
+                </Paragraph>
               </View>
             ) : (
               tripTransactions
@@ -232,26 +267,22 @@ const TripDetailScreen = ({ navigation, route }) => {
                   const defaultLabel = transaction.type === 'income' ? 'Receita não informada' : 'Gasto não informado';
                   const categoryLabel = category?.name || transaction.categoryName || defaultLabel;
                   return (
-                    <Surface key={transaction.id} style={styles.transactionCard}>
-                      <View style={styles.transactionHeader}>
+                    <Surface key={transaction.id} style={styles.transactionCard} elevation={1}>
+                      <View style={styles.transactionRow}>
                         <View style={styles.transactionInfo}>
-                          <Text style={styles.transactionTitle}>
+                          <Text style={styles.transactionDescription}>
                             {transaction.description || 'Sem descrição'}
                           </Text>
-                          <Text style={styles.transactionCategory}>
-                            {categoryLabel}
-                          </Text>
-                          <Text style={styles.transactionDate}>
-                            {formatDate(transaction.date)}
-                          </Text>
+                          <View style={styles.transactionDetails}>
+                            <Chip icon="tag" style={styles.detailChip}>{categoryLabel}</Chip>
+                            <Chip icon="calendar" style={styles.detailChip}>{formatDate(transaction.date)}</Chip>
+                          </View>
                         </View>
                         
                         <View style={styles.transactionRight}>
                           <Text style={[
                             styles.transactionAmount,
-                            { 
-                              color: transaction.type === 'income' ? '#4CAF50' : '#F44336' 
-                            }
+                            { color: transaction.type === 'income' ? theme.colors.primary : theme.colors.error }
                           ]}>
                             {transaction.type === 'income' ? '+' : '-'}
                             {formatCurrencyValue(
@@ -261,9 +292,10 @@ const TripDetailScreen = ({ navigation, route }) => {
                           </Text>
                           
                           <IconButton
-                            icon="delete"
+                            icon="delete-outline"
                             size={20}
                             onPress={() => handleDeleteTransaction(transaction.id)}
+                            style={styles.deleteButton}
                           />
                         </View>
                       </View>
@@ -276,15 +308,22 @@ const TripDetailScreen = ({ navigation, route }) => {
 
         {/* Recurring confirmations */}
         {dueRecurrences.length > 0 && (
-          <Card style={styles.card}>
-            <Card.Title title="Confirmações Pendentes" subtitle="Transações recorrentes com ocorrência para hoje" />
+          <Card style={[styles.card, { borderColor: theme.colors.primary, borderWidth: 1 }]}>
+            <Card.Title title="Confirmações Pendentes" subtitle="Recorrentes aguardando aplicação" />
             <Card.Content>
               {dueRecurrences.map(r => (
                 <View key={r.id} style={styles.recurringRow}>
-                  <Text style={styles.recurringText}>
-                    {r.description || `${r.frequency} - ${r.type === 'expense' ? 'Gasto' : 'Receita'}`} — {formatCurrency(r.amount)}
-                  </Text>
-                  <Button mode="contained" onPress={() => setConfirmDialog({ visible: true, recurring: r })}>
+                  <View style={styles.recurringInfo}>
+                    <Text style={styles.recurringText}>
+                      {r.description || `${r.frequency} - ${r.type === 'expense' ? 'Gasto' : 'Receita'}`}
+                    </Text>
+                    <Text style={styles.recurringAmount}>{formatCurrency(r.amount)}</Text>
+                  </View>
+                  <Button 
+                    mode="contained" 
+                    onPress={() => setConfirmDialog({ visible: true, recurring: r })}
+                    style={{ borderRadius: 10 }}
+                  >
                     Confirmar
                   </Button>
                 </View>
@@ -327,6 +366,7 @@ const TripDetailScreen = ({ navigation, route }) => {
         ]}
         onStateChange={({ open }) => setFabOpen(open)}
         style={styles.fabGroup}
+        fabStyle={{ backgroundColor: theme.colors.primary }}
       />
     </View>
   );
@@ -335,7 +375,6 @@ const TripDetailScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   scrollView: {
     flex: 1,
@@ -343,90 +382,106 @@ const styles = StyleSheet.create({
   headerCard: {
     margin: 16,
     marginBottom: 8,
-    elevation: 2,
+    elevation: 0,
+    backgroundColor: 'transparent',
   },
-  card: {
-    margin: 16,
-    marginBottom: 8,
-    elevation: 2,
-  },
-  description: {
-    fontStyle: 'italic',
-    marginTop: 8,
-  },
-  dateRow: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  card: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 16,
+    elevation: 2,
+  },
+  elevated: {
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  description: {
+    opacity: 0.7,
+    marginTop: 4,
+    marginBottom: 8,
   },
   dateText: {
     fontSize: 14,
     opacity: 0.7,
   },
   activeChip: {
-    backgroundColor: '#E8F5E8',
+    backgroundColor: '#E8F5E9',
+  },
+  activeChipText: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+  balanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 8,
+  },
+  balanceItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  balanceLabel: {
+    fontSize: 12,
+    opacity: 0.7,
+    marginBottom: 4,
+  },
+  balanceValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  pill: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+  },
+  pillSoft: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 12,
   },
   budgetRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   budgetLabel: {
     fontSize: 16,
+    opacity: 0.8,
   },
   budgetValue: {
     fontSize: 16,
-    fontWeight: '500',
-  },
-  balanceValue: {
-    fontSize: 18,
     fontWeight: 'bold',
   },
-  progressContainer: {
-    marginTop: 12,
-  },
-  progressLabel: {
-    fontSize: 14,
-    marginBottom: 8,
-    opacity: 0.7,
-  },
-  progressBar: {
-    height: 8,
-    borderRadius: 4,
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  categoryName: {
-    fontSize: 16,
-    flex: 1,
-  },
-  categoryStats: {
-    alignItems: 'flex-end',
-  },
-  categoryCount: {
-    fontSize: 12,
-    opacity: 0.7,
+  categoryItem: {
+    paddingVertical: 4,
   },
   categoryTotal: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: 'bold',
     color: '#F44336',
   },
   divider: {
-    marginVertical: 4,
+    marginVertical: 12,
   },
   emptyContainer: {
     alignItems: 'center',
     padding: 20,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -438,10 +493,10 @@ const styles = StyleSheet.create({
   transactionCard: {
     marginBottom: 8,
     padding: 12,
-    borderRadius: 8,
-    elevation: 1,
+    borderRadius: 12,
+    backgroundColor: '#FAFAFA',
   },
-  transactionHeader: {
+  transactionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -449,43 +504,59 @@ const styles = StyleSheet.create({
   transactionInfo: {
     flex: 1,
   },
-  transactionTitle: {
+  transactionDescription: {
     fontSize: 16,
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  transactionCategory: {
-    fontSize: 14,
-    opacity: 0.7,
-    marginBottom: 2,
+  transactionDetails: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  transactionDate: {
-    fontSize: 12,
-    opacity: 0.5,
+  detailChip: {
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   transactionRight: {
     alignItems: 'flex-end',
+    marginLeft: 8,
   },
   transactionAmount: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 4,
   },
-  fabGroup: {
-    paddingBottom: 16,
+  deleteButton: {
+    marginTop: -4,
+    marginRight: -8,
+  },
+  recurringRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  recurringInfo: {
+    flex: 1,
+  },
+  recurringText: {
+    fontSize: 16,
+  },
+  recurringAmount: {
+    fontSize: 14,
+    opacity: 0.8,
+    fontWeight: 'bold',
   },
   bottomSpacer: {
     height: 80,
   },
-  recurringRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginVertical: 6,
-  },
-  recurringText: {
-    flex: 1,
-    marginRight: 8,
+  fabGroup: {
+    position: 'absolute',
+    margin: 16,
+    right: 0,
+    bottom: 0,
   },
 });
 

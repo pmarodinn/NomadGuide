@@ -7,47 +7,48 @@ import { MedicationProvider } from './src/contexts/MedicationContext';
 import { CurrencyProvider } from './src/contexts/CurrencyContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
-// Tema personalizado do Material Design
+// Tema personalizado (azul e amarelo)
 const theme = {
   colors: {
-    primary: '#6200ea',
-    primaryContainer: '#bb86fc',
-    secondary: '#03dac6',
-    secondaryContainer: '#03dac6',
-    tertiary: '#ff5722',
-    tertiaryContainer: '#ffccbc',
+    primary: '#1565C0',            // Azul
+    primaryContainer: '#E3F2FD',   // Azul claro
+    secondary: '#FFC107',          // Amarelo
+    secondaryContainer: '#FFF8E1', // Amarelo claro
+    tertiary: '#0D47A1',
+    tertiaryContainer: '#E3F2FD',
     surface: '#ffffff',
-    surfaceVariant: '#f5f5f5',
-    background: '#f5f5f5',
-    error: '#b00020',
-    errorContainer: '#ffcdd2',
+    surfaceVariant: '#F7F9FC',
+    background: '#F7F9FC',
+    error: '#D32F2F',
+    errorContainer: '#FFEBEE',
     onPrimary: '#ffffff',
-    onPrimaryContainer: '#000000',
+    onPrimaryContainer: '#0D47A1',
     onSecondary: '#000000',
-    onSecondaryContainer: '#000000',
+    onSecondaryContainer: '#795548',
     onTertiary: '#ffffff',
-    onTertiaryContainer: '#000000',
-    onSurface: '#000000',
-    onSurfaceVariant: '#666666',
-    onBackground: '#000000',
+    onTertiaryContainer: '#0D47A1',
+    onSurface: '#0F172A',
+    onSurfaceVariant: '#475569',
+    onBackground: '#0F172A',
     onError: '#ffffff',
-    onErrorContainer: '#000000',
-    outline: '#cccccc',
-    outlineVariant: '#e0e0e0',
+    onErrorContainer: '#D32F2F',
+    outline: '#E2E8F0',
+    outlineVariant: '#E2E8F0',
     shadow: '#000000',
     scrim: '#000000',
-    inverseSurface: '#333333',
+    inverseSurface: '#1E293B',
     inverseOnSurface: '#ffffff',
-    inversePrimary: '#bb86fc',
+    inversePrimary: '#90CAF9',
     elevation: {
       level0: 'transparent',
       level1: '#ffffff',
-      level2: '#f8f8ff',
-      level3: '#f0f0ff',
-      level4: '#eeeeee',
-      level5: '#e8e8e8',
+      level2: '#FAFBFF',
+      level3: '#F4F7FE',
+      level4: '#EEF2FF',
+      level5: '#E3F2FD',
     },
   },
+  roundness: 12,
 };
 
 export default function App() {
@@ -57,7 +58,7 @@ export default function App() {
         <CurrencyProvider>
           <TripProvider>
             <MedicationProvider>
-              <StatusBar style="light" backgroundColor="#6200ea" />
+              <StatusBar style="light" backgroundColor="#1565C0" />
               <AppNavigator />
             </MedicationProvider>
           </TripProvider>

@@ -14,19 +14,21 @@ import {
   Chip,
   Menu,
   Portal,
-  Dialog
+  Dialog,
+  useTheme
 } from 'react-native-paper';
 import { useTripContext } from '../contexts/TripContext';
 import { useCurrencyContext } from '../contexts/CurrencyContext';
 
 const AddTransactionScreen = ({ navigation, route }) => {
-  const { tripId } = route.params || {};
+  const { tripId, type: initialType = 'expense' } = route.params || {};
   const { categories, addTransaction, trips } = useTripContext();
   const { getSupportedCurrencies, formatCurrency: formatCurrencyValue, convertCurrency } = useCurrencyContext();
+  const theme = useTheme();
   
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [type, setType] = useState('expense');
+  const [type, setType] = useState(initialType);
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [selectedIncomeCategory, setSelectedIncomeCategory] = useState('');
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
@@ -155,63 +157,57 @@ const AddTransactionScreen = ({ navigation, route }) => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>💰 Nova Transação</Title>
-          
-          {trip && (
-            <View style={styles.tripInfo}>
-              <Text style={styles.tripName}>Viagem: {trip.name}</Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <Card style={styles.card}>
+          <Card.Content>
+            <Title style={styles.title}>💰 Nova Transação</Title>
+            
+            {trip && (
+              <Chip icon="briefcase" style={styles.tripChip}>
+                Viagem: {trip.name}
+              </Chip>
+            )}
+            
+            <Divider style={styles.divider} />
+
+            <Text style={styles.sectionTitle}>Tipo de Transação</Text>
+            <View style={styles.typeRow}>
+              <Chip
+                selected={type === 'expense'}
+                onPress={() => setType('expense')}
+                style={[styles.typeChip, type === 'expense' && styles.typeChipSelected]}
+                icon="minus-circle"
+              >
+                Gasto
+              </Chip>
+              <Chip
+                selected={type === 'income'}
+                onPress={() => setType('income')}
+                style={[styles.typeChip, type === 'income' && styles.typeChipSelected]}
+                icon="plus-circle"
+              >
+                Receita
+              </Chip>
             </View>
-          )}
-          
-          <View style={styles.section}>
-            <Paragraph style={styles.sectionTitle}>Tipo de Transação:</Paragraph>
-            <RadioButton.Group 
-              onValueChange={value => setType(value)} 
-              value={type}
-            >
-              <View style={styles.radioRow}>
-                <RadioButton.Item 
-                  label="💸 Gasto" 
-                  value="expense" 
-                  status={type === 'expense' ? 'checked' : 'unchecked'}
-                />
-                <RadioButton.Item 
-                  label="💵 Receita" 
-                  value="income"
-                  status={type === 'income' ? 'checked' : 'unchecked'}
-                />
-              </View>
-            </RadioButton.Group>
-          </View>
 
-          <Divider style={styles.divider} />
+            <Divider style={styles.divider} />
 
-          <TextInput
-            label="💰 Valor"
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="decimal-pad"
-            mode="outlined"
-            style={styles.input}
-            placeholder="0,00"
-            right={
-              amount ? (
-                <TextInput.Affix 
-                  text={formatCurrencyValue(parseFloat(amount) || 0, selectedCurrency)} 
-                />
-              ) : null
-            }
-          />
+            <Text style={styles.sectionTitle}>Detalhes</Text>
+            <TextInput
+              label="Valor"
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="decimal-pad"
+              mode="outlined"
+              style={styles.input}
+              left={<TextInput.Icon icon="cash" />}
+            />
 
-          <View style={styles.currencyContainer}>
             <Button
               mode="outlined"
               onPress={() => setShowCurrencyDialog(true)}
               style={styles.currencyButton}
-              contentStyle={styles.currencyButtonContent}
               icon="currency-usd"
             >
               {(() => {
@@ -221,210 +217,197 @@ const AddTransactionScreen = ({ navigation, route }) => {
             </Button>
             
             {convertedAmount && trip?.defaultCurrency && selectedCurrency !== trip.defaultCurrency && (
-              <View style={styles.conversionInfo}>
-                <Text style={styles.conversionText}>
-                  ≈ {formatCurrencyValue(convertedAmount, trip.defaultCurrency)} 
-                  <Text style={styles.conversionNote}> (moeda da viagem)</Text>
-                </Text>
-              </View>
+              <Chip icon="swap-horizontal" style={styles.conversionChip}>
+                ≈ {formatCurrencyValue(convertedAmount, trip.defaultCurrency)} (na moeda da viagem)
+              </Chip>
             )}
-          </View>
 
-      {/* Currency selection dialog */}
-      <Portal>
-        <Dialog visible={showCurrencyDialog} onDismiss={() => setShowCurrencyDialog(false)}>
-          <Dialog.Title>Selecionar Moeda</Dialog.Title>
-          <Dialog.ScrollArea>
-            <ScrollView style={{ maxHeight: 320 }}>
-              {getSupportedCurrencies().map((currency) => (
-                <List.Item
-                  key={currency.code}
-                  title={`${currency.flag} ${currency.code} - ${currency.name}`}
-                  right={() => (
-                    <RadioButton
-                      value={currency.code}
-                      status={selectedCurrency === currency.code ? 'checked' : 'unchecked'}
-                      onPress={() => {
-                        userChangedCurrencyRef.current = true;
-                        setSelectedCurrency(currency.code);
-                        setShowCurrencyDialog(false);
-                      }}
-                    />
-                  )}
+            <TextInput
+              label="Descrição (opcional)"
+              value={description}
+              onChangeText={setDescription}
+              mode="outlined"
+              style={styles.input}
+              left={<TextInput.Icon icon="text" />}
+            />
+
+            <Divider style={styles.divider} />
+
+            <Text style={styles.sectionTitle}>Categoria (opcional)</Text>
+            <View style={styles.categoryGrid}>
+              {(type === 'expense' ? categories : incomeCategories).map((cat) => (
+                <Chip
+                  key={cat.id || cat.key}
+                  mode="outlined"
+                  selected={type === 'expense' ? selectedCategoryId === cat.id : selectedIncomeCategory === cat.name}
                   onPress={() => {
-                    userChangedCurrencyRef.current = true;
-                    setSelectedCurrency(currency.code);
-                    setShowCurrencyDialog(false);
+                    if (type === 'expense') {
+                      setSelectedCategoryId(prev => prev === cat.id ? '' : cat.id);
+                    } else {
+                      setSelectedIncomeCategory(prev => prev === cat.name ? '' : cat.name);
+                    }
                   }}
-                />
+                  style={[
+                    styles.categoryChip,
+                    (type === 'expense' ? selectedCategoryId === cat.id : selectedIncomeCategory === cat.name) && styles.selectedChip
+                  ]}
+                  textStyle={styles.chipText}
+                  icon={() => <Text>{cat.icon}</Text>}
+                >
+                  {cat.name}
+                </Chip>
               ))}
-            </ScrollView>
-          </Dialog.ScrollArea>
-          <Dialog.Actions>
-            <Button onPress={() => setShowCurrencyDialog(false)}>Fechar</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+            </View>
+          </Card.Content>
+        </Card>
 
-          <TextInput
-            label="📝 Descrição (opcional)"
-            value={description}
-            onChangeText={setDescription}
-            mode="outlined"
-            style={styles.input}
-            placeholder="Ex: Almoço no restaurante"
-            multiline
-            numberOfLines={2}
-          />
-
-          <View style={styles.section}>
-            <Paragraph style={styles.sectionTitle}>Categoria (opcional):</Paragraph>
-            {type === 'expense' ? (
-              <View style={styles.categoryGrid}>
-                {categories.map((cat) => (
-                  <Chip
-                    key={cat.id}
-                    mode={selectedCategoryId === cat.id ? 'flat' : 'outlined'}
-                    selected={selectedCategoryId === cat.id}
-                    onPress={() => setSelectedCategoryId(prev => prev === cat.id ? '' : cat.id)}
-                    style={[
-                      styles.categoryChip,
-                      selectedCategoryId === cat.id && styles.selectedChip
-                    ]}
-                    textStyle={styles.chipText}
-                  >
-                    {cat.icon} {cat.name}
-                  </Chip>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.categoryGrid}>
-                {incomeCategories.map((cat) => (
-                  <Chip
-                    key={cat.key}
-                    mode={selectedIncomeCategory === cat.name ? 'flat' : 'outlined'}
-                    selected={selectedIncomeCategory === cat.name}
-                    onPress={() => setSelectedIncomeCategory(prev => prev === cat.name ? '' : cat.name)}
-                    style={[
-                      styles.categoryChip,
-                      selectedIncomeCategory === cat.name && styles.selectedChip
-                    ]}
-                    textStyle={styles.chipText}
-                  >
-                    {cat.icon} {cat.name}
-                  </Chip>
-                ))}
-              </View>
-            )}
-          </View>
-
+        <View style={styles.bottomActions}>
+          <Button
+            mode="text"
+            onPress={() => navigation.goBack()}
+            style={styles.actionButton}
+          >
+            Cancelar
+          </Button>
           <Button
             mode="contained"
             onPress={handleSubmit}
-            style={styles.button}
-            icon="plus"
+            style={styles.actionButton}
+            icon="check"
             loading={loading}
             disabled={loading}
           >
-            {loading ? 'Adicionando...' : 'Adicionar Transação'}
+            {loading ? 'Adicionando...' : 'Adicionar'}
           </Button>
-        </Card.Content>
-      </Card>
+        </View>
 
-      <Snackbar
-        visible={showSnackbar}
-        onDismiss={() => setShowSnackbar(false)}
-        duration={3000}
-      >
-        {snackbarMessage}
-      </Snackbar>
-    </ScrollView>
+        {/* Currency selection dialog */}
+        <Portal>
+          <Dialog visible={showCurrencyDialog} onDismiss={() => setShowCurrencyDialog(false)}>
+            <Dialog.Title>Selecionar Moeda</Dialog.Title>
+            <Dialog.ScrollArea>
+              <ScrollView style={{ maxHeight: 320 }}>
+                {getSupportedCurrencies().map((currency) => (
+                  <List.Item
+                    key={currency.code}
+                    title={`${currency.flag} ${currency.code} - ${currency.name}`}
+                    right={() => (
+                      <RadioButton
+                        value={currency.code}
+                        status={selectedCurrency === currency.code ? 'checked' : 'unchecked'}
+                        onPress={() => {
+                          userChangedCurrencyRef.current = true;
+                          setSelectedCurrency(currency.code);
+                          setShowCurrencyDialog(false);
+                        }}
+                      />
+                    )}
+                    onPress={() => {
+                      userChangedCurrencyRef.current = true;
+                      setSelectedCurrency(currency.code);
+                      setShowCurrencyDialog(false);
+                    }}
+                  />
+                ))}
+              </ScrollView>
+            </Dialog.ScrollArea>
+            <Dialog.Actions>
+              <Button onPress={() => setShowCurrencyDialog(false)}>Fechar</Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
+
+        <Snackbar
+          visible={showSnackbar}
+          onDismiss={() => setShowSnackbar(false)}
+          duration={3000}
+          style={{ bottom: 80 }}
+        >
+          {snackbarMessage}
+        </Snackbar>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
+    paddingTop: 8,
   },
   card: {
     margin: 16,
+    borderRadius: 16,
     elevation: 2,
   },
-  tripInfo: {
-    backgroundColor: '#E3F2FD',
-    padding: 12,
-    borderRadius: 8,
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
     marginBottom: 16,
   },
-  tripName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1976D2',
-  },
-  section: {
-    marginVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '500',
+  tripChip: {
+    alignSelf: 'flex-start',
     marginBottom: 8,
   },
-  radioRow: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  typeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    gap: 8,
+  },
+  typeChip: {
+    flex: 1,
+    paddingVertical: 4,
+  },
+  typeChipSelected: {
+    backgroundColor: '#E3F2FD', // Azul claro
   },
   input: {
-    marginVertical: 8,
+    marginBottom: 12,
+  },
+  currencyButton: {
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  conversionChip: {
+    alignSelf: 'flex-start',
+    marginBottom: 16,
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 8,
   },
   categoryChip: {
-    marginBottom: 8,
-    marginRight: 8,
+    marginRight: 6,
+    marginBottom: 6,
   },
   selectedChip: {
     backgroundColor: '#E3F2FD',
   },
   chipText: {
-    fontSize: 12,
+    marginLeft: 4,
   },
-  button: {
-    marginTop: 24,
-    paddingVertical: 8,
+  bottomActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    paddingBottom: 24,
+    gap: 16,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
   divider: {
-    marginVertical: 16,
-  },
-  currencyContainer: {
-    marginVertical: 8,
-  },
-  currencyButton: {
-    justifyContent: 'flex-start',
-    marginBottom: 8,
-  },
-  currencyButtonContent: {
-    justifyContent: 'flex-start',
-    paddingHorizontal: 8,
-  },
-  conversionInfo: {
-    backgroundColor: '#f5f5f5',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  conversionText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-  },
-  conversionNote: {
-    fontSize: 12,
-    fontStyle: 'italic',
+    marginVertical: 20,
   },
 });
 

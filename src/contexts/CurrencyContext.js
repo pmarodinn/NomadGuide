@@ -22,6 +22,17 @@ export const CurrencyProvider = ({ children }) => {
   // Carregar taxas de câmbio
   const loadExchangeRates = useCallback(async (baseCurrency = 'USD') => {
     if (isLoadingRates) return;
+
+    // Evitar recarregar se atualizado há menos de 12h
+    if (lastUpdated) {
+      const now = Date.now();
+      const last = new Date(lastUpdated).getTime();
+      const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+      if (now - last < TWELVE_HOURS && exchangeRates[baseCurrency]) {
+        console.log('⏱️ Skipping rates load: cache still fresh (<12h)');
+        return;
+      }
+    }
     
     setIsLoadingRates(true);
     try {
@@ -37,7 +48,7 @@ export const CurrencyProvider = ({ children }) => {
     } finally {
       setIsLoadingRates(false);
     }
-  }, [isLoadingRates]);
+  }, [isLoadingRates, lastUpdated, exchangeRates]);
 
   // Carregar taxas iniciais
   useEffect(() => {

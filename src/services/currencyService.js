@@ -32,7 +32,7 @@ export const SUPPORTED_CURRENCIES = {
 
 // Cache de taxas de câmbio
 const CACHE_KEY = 'exchange_rates_cache';
-const CACHE_DURATION = 3600000; // 1 hora em milliseconds
+const CACHE_DURATION = 43200000; // 12 horas em milliseconds
 
 class CurrencyService {
   constructor() {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Alert, Platform, Dimensions, KeyboardAvoidingView } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, Platform, Dimensions, KeyboardAvoidingView, SafeAreaView, StatusBar } from 'react-native';
 import { 
   Title, 
   Paragraph, 
@@ -13,18 +13,27 @@ import {
   Menu,
   Divider,
   Text,
-  useTheme
+  Surface,
+  IconButton
 } from 'react-native-paper';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useTripContext } from '../contexts/TripContext';
 import { useCurrencyContext } from '../contexts/CurrencyContext';
 import { formatCurrency } from '../utils/currencyUtils';
 import { formatDate } from '../utils/dateUtils';
+import { colors, spacing, borderRadius, typography, elevation } from '../theme/colors';
+import { 
+  BalanceCard, 
+  QuickActionButton, 
+  SectionHeader, 
+  CardContainer 
+} from '../components/BankingComponents';
 
 const TripListScreen = ({ navigation }) => {
-  const { trips, activeTrip, loading, createTrip, updateTrip, activateTrip } = useTripContext();
+  const { trips, loading, createTrip, updateTrip, activateTrip, getTripBalance, getProjectedBalance, getActiveTrip } = useTripContext();
+  const activeTrip = getActiveTrip();
   const { getSupportedCurrencies, formatCurrency: formatCurrencyValue, detectCurrencyByCountry, convertCurrency } = useCurrencyContext();
-  const theme = useTheme();
+  
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
   const [showBudgetCurrencyMenu, setShowBudgetCurrencyMenu] = useState(false);
@@ -33,7 +42,7 @@ const TripListScreen = ({ navigation }) => {
   const [budgetCurrency, setBudgetCurrency] = useState('USD');
   const [newTripData, setNewTripData] = useState(() => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Resetar horas para evitar problemas
+    today.setHours(0, 0, 0, 0);
     
     const nextWeek = new Date(today);
     nextWeek.setDate(today.getDate() + 7);
@@ -62,7 +71,6 @@ const TripListScreen = ({ navigation }) => {
     }
 
     try {
-      // Convert budget from input currency to trip currency if different
       let finalBudget = budget;
       if (budgetCurrency !== newTripData.defaultCurrency) {
         try {
@@ -73,7 +81,6 @@ const TripListScreen = ({ navigation }) => {
         }
       }
 
-      // Criar nova viagem (o contexto já gerencia userId e ativação)
       await createTrip({
         name: newTripData.name.trim(),
         budget: finalBudget,
@@ -102,8 +109,6 @@ const TripListScreen = ({ navigation }) => {
         defaultCurrency: 'USD'
       });
       setBudgetCurrency('USD');
-      setShowStartDatePicker(false);
-      setShowEndDatePicker(false);
 
       Alert.alert('Sucesso', 'Viagem criada com sucesso!');
     } catch (error) {
@@ -118,112 +123,9 @@ const TripListScreen = ({ navigation }) => {
     return diffDays;
   };
 
-  const handleStartDateChange = (event, selectedDate) => {
-    console.log('handleStartDateChange called with:', event?.type, selectedDate);
-    
-    const isAndroid = Platform.OS === 'android';
-    const isIOS = Platform.OS === 'ios';
-    
-    if (isAndroid) {
-      setShowStartDatePicker(false);
-    }
-    
-    if (selectedDate && event?.type !== 'dismissed') {
-      const newStartDate = new Date(selectedDate);
-      newStartDate.setHours(0, 0, 0, 0); // Normalizar a hora
-      
-      console.log('Setting new start date:', newStartDate);
-      console.log('Current end date:', newTripData.endDate);
-      
-      // Se a data final for anterior à nova data inicial, ajustar
-      let newEndDate = newTripData.endDate;
-      if (newStartDate >= newTripData.endDate) {
-        newEndDate = new Date(newStartDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-        newEndDate.setHours(0, 0, 0, 0);
-        console.log('Adjusted end date to:', newEndDate);
-      }
-      
-      setNewTripData(prev => ({
-        ...prev,
-        startDate: newStartDate,
-        endDate: newEndDate
-      }));
-    } else if (event?.type === 'dismissed') {
-      console.log('Start date picker dismissed');
-    }
-    
-    if (isIOS) {
-      setShowStartDatePicker(false);
-    }
-  };
-
-  const handleEndDateChange = (event, selectedDate) => {
-    console.log('handleEndDateChange called with:', event?.type, selectedDate);
-    
-    const isAndroid = Platform.OS === 'android';
-    const isIOS = Platform.OS === 'ios';
-    
-    if (isAndroid) {
-      setShowEndDatePicker(false);
-    }
-    
-    if (selectedDate && event?.type !== 'dismissed') {
-      const newEndDate = new Date(selectedDate);
-      newEndDate.setHours(0, 0, 0, 0); // Normalizar a hora
-      
-      console.log('Setting new end date:', newEndDate);
-      console.log('Current start date:', newTripData.startDate);
-      
-      // Verificar se a data final é posterior à data inicial
-      if (newEndDate >= newTripData.startDate) {
-        console.log('Valid end date, updating state');
-        setNewTripData(prev => ({ ...prev, endDate: newEndDate }));
-      } else {
-        // Se a data final for anterior à inicial, mostrar aviso
-        console.log('Invalid end date - before start date');
-        Alert.alert('Data Inválida', 'A data final deve ser posterior à data inicial.');
-      }
-    } else if (event?.type === 'dismissed') {
-      console.log('End date picker dismissed');
-    }
-    
-    if (isIOS) {
-      setShowEndDatePicker(false);
-    }
-  };
-
-  const handleOpenCreateDialog = () => {
-    // Reset form data with fresh dates
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Resetar horas para evitar problemas
-    
-    const nextWeek = new Date(today);
-    nextWeek.setDate(today.getDate() + 7);
-    nextWeek.setHours(0, 0, 0, 0);
-    
-    console.log('Opening dialog with dates:', { startDate: today, endDate: nextWeek });
-    
-    setNewTripData({
-      name: '',
-      budget: '',
-      startDate: today,
-      endDate: nextWeek,
-      description: '',
-      defaultCurrency: 'USD'
-    });
-    setBudgetCurrency('USD');
-    setShowCurrencyMenu(false);
-    setShowBudgetCurrencyMenu(false);
-    setShowStartDatePicker(false);
-    setShowEndDatePicker(false);
-    setShowCreateDialog(true);
-  };
-
   const handleActivateTrip = async (trip) => {
     try {
-      // Usar a função de ativação do contexto que já gerencia tudo
       await activateTrip(trip.id);
-      
       Alert.alert('Sucesso', `Viagem "${trip.name}" ativada!`);
     } catch (error) {
       console.error('Erro ao ativar viagem:', error);
@@ -249,40 +151,62 @@ const TripListScreen = ({ navigation }) => {
     navigation.navigate('AddRecurringTransaction', { tripId: active.id });
   };
 
+  const handleOpenCreateDialog = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7);
+    nextWeek.setHours(0, 0, 0, 0);
+    
+    setNewTripData({
+      name: '',
+      budget: '',
+      startDate: today,
+      endDate: nextWeek,
+      description: '',
+      defaultCurrency: 'USD'
+    });
+    setBudgetCurrency('USD');
+    setShowCreateDialog(true);
+  };
+
   const TripCard = ({ trip }) => (
-    <Card style={[styles.tripCard, trip.isActive && styles.activeTrip]}>
-      <Card.Content>
-        <View style={styles.tripHeader}>
-          <Title style={styles.tripTitle}>{trip.name}</Title>
-          {trip.isActive && <Chip mode="flat" style={styles.activeChip} textStyle={styles.activeChipText}>ATIVA</Chip>}
+    <CardContainer style={[styles.tripCard, trip.isActive && styles.activeTrip]}>
+      <View style={styles.tripHeader}>
+        <View style={styles.tripTitleRow}>
+          <Text style={styles.tripTitle}>{trip.name}</Text>
+          {trip.isActive && <Chip mode="flat" style={styles.activeChip}>ATIVA</Chip>}
         </View>
         
-        <Paragraph style={styles.tripBudget}>
-          💰 Orçamento: {formatCurrencyValue(trip.budget, trip.defaultCurrency || 'USD')}
-        </Paragraph>
-        
-        <View style={styles.dateContainer}>
-          <Chip icon="calendar" style={styles.dateChip}>
-            {formatDate(trip.startDate?.toDate?.() || trip.startDate)}
-          </Chip>
-          <Text style={styles.dateSeparator}>→</Text>
-          <Chip icon="calendar" style={styles.dateChip}>
-            {formatDate(trip.endDate?.toDate?.() || trip.endDate)}
-          </Chip>
+        <View style={styles.balanceRow}>
+          <BalanceCard
+            title="Orçamento"
+            balance={formatCurrencyValue(trip.budget, trip.defaultCurrency || 'USD')}
+            type="primary"
+            style={styles.budgetCard}
+          />
+          <BalanceCard
+            title="Restante"
+            balance={formatCurrencyValue(getTripBalance(trip.id), trip.defaultCurrency || 'USD')}
+            type={getTripBalance(trip.id) >= 0 ? "success" : "error"}
+            style={styles.remainingCard}
+          />
         </View>
         
-        <Paragraph style={styles.tripDuration}>
-          ⏱️ Duração: {calculateTripDuration(trip.startDate?.toDate?.() || trip.startDate, trip.endDate?.toDate?.() || trip.endDate)} dias
-        </Paragraph>
+        <View style={styles.tripMeta}>
+          <Text style={styles.tripDates}>
+            {formatDate(trip.startDate?.toDate?.() || trip.startDate)} - {formatDate(trip.endDate?.toDate?.() || trip.endDate)}
+          </Text>
+          <Text style={styles.tripDuration}>
+            {calculateTripDuration(trip.startDate?.toDate?.() || trip.startDate, trip.endDate?.toDate?.() || trip.endDate)} dias
+          </Text>
+        </View>
         
         {trip.description && (
-          <Paragraph style={styles.tripDescription}>
-            {trip.description}
-          </Paragraph>
+          <Text style={styles.tripDescription}>{trip.description}</Text>
         )}
         
-        <Divider style={styles.cardDivider} />
-
         <View style={styles.tripActions}>
           <Button 
             mode="outlined" 
@@ -291,95 +215,100 @@ const TripListScreen = ({ navigation }) => {
               tripName: trip.name 
             })}
             style={styles.actionButton}
-            icon="eye"
+            contentStyle={styles.actionButtonContent}
           >
-            Detalhes
+            Ver Extrato
           </Button>
           
           {!trip.isActive && (
             <Button 
               mode="contained" 
               onPress={() => handleActivateTrip(trip)}
-              style={styles.actionButton}
-              icon="check"
+              style={[styles.actionButton, styles.activateButton]}
+              contentStyle={styles.actionButtonContent}
             >
               Ativar
             </Button>
           )}
         </View>
-      </Card.Content>
-    </Card>
+      </View>
+    </CardContainer>
   );
 
-  // Android pickers: open native modal to avoid conflicts with Paper Dialog
-  const openAndroidStartPicker = () => {
-    DateTimePickerAndroid.open({
-      value: newTripData.startDate,
-      mode: 'date',
-      onChange: (event, selectedDate) => {
-        if (event?.type !== 'dismissed' && selectedDate) {
-          const newStartDate = new Date(selectedDate);
-          newStartDate.setHours(0, 0, 0, 0);
-
-          let newEndDate = newTripData.endDate;
-          if (newStartDate >= newEndDate) {
-            newEndDate = new Date(newStartDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-            newEndDate.setHours(0, 0, 0, 0);
-          }
-
-          setNewTripData(prev => ({
-            ...prev,
-            startDate: newStartDate,
-            endDate: newEndDate,
-          }));
-        }
-      },
-      // minimumDate: new Date(), // enable if you want to block past dates
-      // maximumDate: new Date(new Date().getFullYear() + 2, 11, 31),
-    });
-  };
-
-  const openAndroidEndPicker = () => {
-    DateTimePickerAndroid.open({
-      value: newTripData.endDate,
-      mode: 'date',
-      onChange: (event, selectedDate) => {
-        if (event?.type !== 'dismissed' && selectedDate) {
-          const newEndDate = new Date(selectedDate);
-          newEndDate.setHours(0, 0, 0, 0);
-
-          if (newEndDate >= newTripData.startDate) {
-            setNewTripData(prev => ({ ...prev, endDate: newEndDate }));
-          } else {
-            Alert.alert('Data Inválida', 'A data final deve ser posterior à data inicial.');
-          }
-        }
-      },
-      minimumDate: newTripData.startDate,
-      // maximumDate: new Date(new Date().getFullYear() + 2, 11, 31),
-    });
-  };
-
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar backgroundColor={colors.primary} barStyle="light-content" />
+      
+      {/* Header with active trip overview */}
+      {activeTrip && (
+        <Surface style={styles.headerSurface}>
+          <View style={styles.headerContent}>
+            <Text style={styles.welcomeText}>Viagem Ativa</Text>
+            <Text style={styles.tripNameHeader}>{activeTrip.name}</Text>
+            
+            <View style={styles.quickBalanceRow}>
+              <BalanceCard
+                title="Saldo Atual"
+                balance={formatCurrencyValue(getTripBalance(activeTrip.id), activeTrip.defaultCurrency || 'USD')}
+                type={getTripBalance(activeTrip.id) >= 0 ? "success" : "error"}
+                style={styles.headerBalanceCard}
+              />
+              <BalanceCard
+                title="Projetado"
+                balance={formatCurrencyValue(getProjectedBalance(activeTrip.id), activeTrip.defaultCurrency || 'USD')}
+                type="secondary"
+                style={styles.headerBalanceCard}
+              />
+            </View>
+          </View>
+        </Surface>
+      )}
+      
+      {/* Quick Actions */}
+      <View style={styles.quickActionsContainer}>
+        <CardContainer style={styles.quickActionsCard}>
+          <Text style={styles.quickActionsTitle}>Ações Rápidas</Text>
+          <View style={styles.quickActionsRow}>
+            <QuickActionButton
+              icon="+"
+              title="Gasto"
+              onPress={navigateToQuickExpense}
+              color={colors.error}
+            />
+            <QuickActionButton
+              icon="↻"
+              title="Recorrente"
+              onPress={navigateToRecurring}
+              color={colors.secondary}
+            />
+            <QuickActionButton
+              icon="○"
+              title="Medicamentos"
+              onPress={() => navigation.navigate('Medications')}
+              color={colors.warning}
+            />
+            <QuickActionButton
+              icon="+"
+              title="Nova Viagem"
+              onPress={handleOpenCreateDialog}
+              color={colors.primary}
+            />
+          </View>
+        </CardContainer>
+      </View>
+
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <SectionHeader title="Suas Viagens" />
+        
         {trips.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <Card.Content style={styles.emptyContent}>
-              <Title style={styles.emptyTitle}>✈️ Nenhuma Viagem</Title>
-              <Paragraph style={styles.emptyText}>
-                Crie sua primeira viagem para começar a gerenciar seus gastos.
-              </Paragraph>
-              <Button
-                mode="contained"
-                icon="plus"
-                onPress={handleOpenCreateDialog}
-                style={{ marginTop: 16 }}
-              >
-                Criar Viagem
-              </Button>
-            </Card.Content>
-          </Card>
+          <CardContainer style={styles.emptyCard}>
+            <View style={styles.emptyContent}>
+              <Text style={styles.emptyTitle}>Nenhuma Viagem Encontrada</Text>
+              <Text style={styles.emptyText}>
+                Crie sua primeira viagem para começar a controlar seus gastos!
+              </Text>
+            </View>
+          </CardContainer>
         ) : (
           trips.map((trip) => (
             <TripCard key={trip.id} trip={trip} />
@@ -389,47 +318,13 @@ const TripListScreen = ({ navigation }) => {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* Quick action FABs for expense and recurring */}
-      <FAB.Group
-        open={fabOpen}
-        icon={fabOpen ? 'close' : 'plus'}
-        actions={[
-          {
-            icon: 'cash-plus',
-            label: 'Gasto Rápido',
-            onPress: navigateToQuickExpense,
-          },
-          {
-            icon: 'refresh',
-            label: 'Gasto Recorrente',
-            onPress: navigateToRecurring,
-          },
-          {
-            icon: 'plus-circle',
-            label: 'Nova Viagem',
-            onPress: handleOpenCreateDialog,
-          },
-        ]}
-        onStateChange={({ open }) => setFabOpen(open)}
-        style={styles.fabGroup}
-        fabStyle={{ backgroundColor: theme.colors.primary }}
-      />
-
+      {/* Create Trip Dialog - Simplified */}
       <Portal>
-        <Dialog visible={showCreateDialog} onDismiss={() => {
-          setShowCreateDialog(false);
-          setShowCurrencyMenu(false);
-          setShowBudgetCurrencyMenu(false);
-          setBudgetCurrency('USD');
-        }} style={styles.dialog}>
-          <Dialog.Title>✈️ Nova Viagem</Dialog.Title>
+        <Dialog visible={showCreateDialog} onDismiss={() => setShowCreateDialog(false)} style={styles.dialog}>
+          <Dialog.Title>Nova Viagem</Dialog.Title>
           <Dialog.ScrollArea>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={64}>
-              <ScrollView
-                keyboardShouldPersistTaps="handled"
-                nestedScrollEnabled
-                contentContainerStyle={styles.dialogScrollContent}
-              >
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
                 <TextInput
                   label="Nome da Viagem"
                   value={newTripData.name}
@@ -439,165 +334,13 @@ const TripListScreen = ({ navigation }) => {
                 />
                 
                 <TextInput
-                  label={`Orçamento em ${budgetCurrency}`}
+                  label="Orçamento"
                   value={newTripData.budget}
                   onChangeText={(text) => setNewTripData(prev => ({ ...prev, budget: text }))}
                   keyboardType="numeric"
                   mode="outlined"
                   style={styles.input}
                 />
-                
-                <Text style={styles.sectionTitle}>Moeda do Orçamento</Text>
-                <Menu
-                  visible={showBudgetCurrencyMenu}
-                  onDismiss={() => setShowBudgetCurrencyMenu(false)}
-                  anchor={
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowBudgetCurrencyMenu(true)}
-                      style={styles.currencyButton}
-                      contentStyle={styles.currencyButtonContent}
-                      icon="cash"
-                    >
-                      {(() => {
-                        const currency = getSupportedCurrencies().find(c => c.code === budgetCurrency);
-                        return `${currency?.flag || '💰'} ${budgetCurrency} - ${currency?.name || 'Dólar Americano'}`;
-                      })()}
-                    </Button>
-                  }
-                >
-                  <ScrollView style={{ maxHeight: 300 }}>
-                    {getSupportedCurrencies().map((currency) => (
-                      <Menu.Item
-                        key={currency.code}
-                        onPress={() => {
-                          setBudgetCurrency(currency.code);
-                          setShowBudgetCurrencyMenu(false);
-                        }}
-                        title={`${currency.flag} ${currency.code} - ${currency.name}`}
-                        titleStyle={currency.code === budgetCurrency ? { fontWeight: 'bold' } : {}}
-                      />
-                    ))}
-                  </ScrollView>
-                </Menu>
-
-                <Divider style={styles.divider} />
-
-                <Text style={styles.sectionTitle}>Moeda da Viagem</Text>
-                <Menu
-                  visible={showCurrencyMenu}
-                  onDismiss={() => setShowCurrencyMenu(false)}
-                  anchor={
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowCurrencyMenu(true)}
-                      style={styles.currencyButton}
-                      contentStyle={styles.currencyButtonContent}
-                      icon="currency-usd"
-                    >
-                      {(() => {
-                        const currency = getSupportedCurrencies().find(c => c.code === newTripData.defaultCurrency);
-                        return `${currency?.flag || ''} ${currency?.code || 'USD'} - ${currency?.name || 'Dólar Americano'}`;
-                      })()}
-                    </Button>
-                  }
-                >
-                  <ScrollView style={{ maxHeight: 300 }}>
-                    {getSupportedCurrencies().map((currency) => (
-                      <Menu.Item
-                        key={currency.code}
-                        onPress={() => {
-                          setNewTripData(prev => ({ ...prev, defaultCurrency: currency.code }));
-                          setShowCurrencyMenu(false);
-                        }}
-                        title={`${currency.flag} ${currency.code} - ${currency.name}`}
-                        titleStyle={currency.code === newTripData.defaultCurrency ? { fontWeight: 'bold' } : {}}
-                      />
-                    ))}
-                  </ScrollView>
-                </Menu>
-
-                {budgetCurrency !== newTripData.defaultCurrency && (
-                  <View style={styles.conversionNote}>
-                    <Text style={styles.conversionText}>
-                      💱 O orçamento será convertido de {budgetCurrency} para {newTripData.defaultCurrency}
-                    </Text>
-                  </View>
-                )}
-
-                <Divider style={styles.divider} />
-                
-                <View style={styles.dateSection}>
-                  <Text style={styles.sectionTitle}>📅 Período da Viagem</Text>
-                  <Text style={styles.dateHelp}>Toque nos botões abaixo para selecionar as datas</Text>
-                  
-                  <View style={styles.dateRow}>
-                    <Button
-                      mode="outlined"
-                      onPress={() => {
-                        console.log('Start date button pressed');
-                        if (Platform.OS === 'android') {
-                          openAndroidStartPicker();
-                        } else {
-                          setShowStartDatePicker(true);
-                        }
-                      }}
-                      style={styles.dateButton}
-                      icon="calendar"
-                    >
-                      Início: {formatDate(newTripData.startDate)}
-                    </Button>
-                    
-                    <Button
-                      mode="outlined"
-                      onPress={() => {
-                        console.log('End date button pressed');
-                        if (Platform.OS === 'android') {
-                          openAndroidEndPicker();
-                        } else {
-                          setShowEndDatePicker(true);
-                        }
-                      }}
-                      style={styles.dateButton}
-                      icon="calendar"
-                    >
-                      Fim: {formatDate(newTripData.endDate)}
-                    </Button>
-                  </View>
-                  
-                  <View style={styles.durationInfo}>
-                    <Text style={styles.durationText}>
-                      ⏱️ Duração: {calculateTripDuration(newTripData.startDate, newTripData.endDate)} dia(s)
-                    </Text>
-                  </View>
-                  
-                  {(showStartDatePicker || showEndDatePicker) && (
-                    <Text style={styles.pickerNote}>
-                      {Platform.OS === 'android' 
-                        ? '📱 Selecione a data e toque em OK' 
-                        : '📱 Selecione a data na roda acima'}
-                    </Text>
-                  )}
-                </View>
-
-                {Platform.OS === 'ios' && showStartDatePicker && (
-                  <DateTimePicker
-                    value={newTripData.startDate}
-                    mode="date"
-                    display={'spinner'}
-                    onChange={handleStartDateChange}
-                  />
-                )}
-
-                {Platform.OS === 'ios' && showEndDatePicker && (
-                  <DateTimePicker
-                    value={newTripData.endDate}
-                    mode="date"
-                    display={'spinner'}
-                    onChange={handleEndDateChange}
-                    minimumDate={newTripData.startDate}
-                  />
-                )}
                 
                 <TextInput
                   label="Descrição (opcional)"
@@ -612,202 +355,184 @@ const TripListScreen = ({ navigation }) => {
             </KeyboardAvoidingView>
           </Dialog.ScrollArea>
           <Dialog.Actions>
-            <Button onPress={() => {
-              setShowCreateDialog(false);
-              setShowCurrencyMenu(false);
-              setShowBudgetCurrencyMenu(false);
-              setBudgetCurrency('USD');
-            }}>Cancelar</Button>
+            <Button onPress={() => setShowCreateDialog(false)}>Cancelar</Button>
             <Button mode="contained" onPress={handleCreateTrip}>Criar</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
+  
+  // Header Styles
+  headerSurface: {
+    backgroundColor: colors.primary,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    borderBottomLeftRadius: borderRadius.xl,
+    borderBottomRightRadius: borderRadius.xl,
+    ...elevation.level2,
+  },
+  headerContent: {
+    alignItems: 'center',
+  },
+  welcomeText: {
+    ...typography.labelLarge,
+    color: colors.backgroundSecondary,
+    opacity: 0.9,
+    marginBottom: spacing.xs,
+  },
+  tripNameHeader: {
+    ...typography.headlineLarge,
+    color: colors.backgroundSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  quickBalanceRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    width: '100%',
+  },
+  headerBalanceCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  
+  // Quick Actions Styles
+  quickActionsContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+  },
+  quickActionsCard: {
+    backgroundColor: colors.backgroundSecondary,
+  },
+  quickActionsTitle: {
+    ...typography.headlineSmall,
+    color: colors.onSurface,
+    marginBottom: spacing.md,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  
+  // ScrollView
   scrollView: {
     flex: 1,
-    paddingTop: 8,
+    paddingHorizontal: spacing.lg,
   },
+  
+  // Trip Card Styles
   tripCard: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 16,
-    elevation: 2,
+    marginBottom: spacing.lg,
+    backgroundColor: colors.backgroundSecondary,
   },
   activeTrip: {
     borderLeftWidth: 4,
-    borderLeftColor: '#FFC107', // Amarelo
+    borderLeftColor: colors.success,
   },
   tripHeader: {
+    gap: spacing.md,
+  },
+  tripTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
   tripTitle: {
+    ...typography.headlineMedium,
+    color: colors.onSurface,
     flex: 1,
-    fontSize: 22,
-    fontWeight: 'bold',
   },
   activeChip: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: colors.successContainer,
+    borderColor: colors.success,
   },
-  activeChipText: {
-    color: '#4CAF50',
-    fontWeight: 'bold',
-  },
-  tripBudget: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 12,
-    opacity: 0.9,
-  },
-  dateContainer: {
+  balanceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: spacing.md,
   },
-  dateChip: {
-    backgroundColor: '#f0f0f0',
+  budgetCard: {
+    flex: 1,
   },
-  dateSeparator: {
-    fontWeight: 'bold',
+  remainingCard: {
+    flex: 1,
+  },
+  tripMeta: {
+    gap: spacing.xs,
+  },
+  tripDates: {
+    ...typography.bodyMedium,
+    color: colors.onSurfaceVariant,
   },
   tripDuration: {
-    fontSize: 14,
-    opacity: 0.8,
-    marginBottom: 12,
+    ...typography.bodyMedium,
+    color: colors.primary,
     fontWeight: '500',
   },
   tripDescription: {
-    fontSize: 14,
+    ...typography.bodyMedium,
+    color: colors.onSurfaceVariant,
     fontStyle: 'italic',
-    marginBottom: 16,
-    opacity: 0.7,
-  },
-  cardDivider: {
-    marginVertical: 8,
   },
   tripActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 8,
+    gap: spacing.md,
+    marginTop: spacing.sm,
   },
   actionButton: {
-    borderRadius: 10,
+    flex: 1,
   },
+  actionButtonContent: {
+    paddingVertical: spacing.xs,
+  },
+  activateButton: {
+    backgroundColor: colors.primary,
+  },
+  
+  // Empty State
   emptyCard: {
-    margin: 16,
-    elevation: 2,
-    borderRadius: 16,
+    backgroundColor: colors.backgroundSecondary,
+    alignItems: 'center',
   },
   emptyContent: {
     alignItems: 'center',
-    padding: 20,
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.lg,
   },
   emptyTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    ...typography.headlineMedium,
+    color: colors.onSurface,
+    marginBottom: spacing.md,
+    textAlign: 'center',
   },
   emptyText: {
+    ...typography.bodyLarge,
+    color: colors.onSurfaceVariant,
     textAlign: 'center',
-    opacity: 0.7,
+    lineHeight: 24,
   },
-  fabGroup: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
-  },
-  bottomSpacer: {
-    height: 80,
-  },
+  
+  // Dialog Styles
   input: {
-    marginBottom: 12,
-  },
-  currencyButton: {
-    marginBottom: 12,
-    justifyContent: 'flex-start',
-  },
-  currencyButtonContent: {
-    justifyContent: 'flex-start',
-    paddingHorizontal: 8,
-  },
-  divider: {
-    marginVertical: 16,
-  },
-  dateSection: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-    color: '#333',
-  },
-  conversionNote: {
-    backgroundColor: '#E3F2FD',
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
-  },
-  conversionText: {
-    fontSize: 14,
-    color: '#1976D2',
-    fontStyle: 'italic',
-  },
-  dateRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  dateButton: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  durationInfo: {
-    backgroundColor: '#f0f4ff',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  durationText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1976d2',
-  },
-  dateHelp: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 8,
-    fontStyle: 'italic',
-  },
-  pickerNote: {
-    fontSize: 12,
-    color: '#FF9800',
-    textAlign: 'center',
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: '#FFF3E0',
-    borderRadius: 4,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surfaceVariant,
   },
   dialog: {
+    backgroundColor: colors.backgroundSecondary,
     maxHeight: Math.round(Dimensions.get('window').height * 0.85),
   },
-  dialogScrollContent: {
-    paddingBottom: 24,
+  
+  bottomSpacer: {
+    height: spacing.xxl,
   },
 });
 

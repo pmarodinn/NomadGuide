@@ -63,7 +63,6 @@ const HomeScreen = ({ navigation }) => {
 
   const daysRemaining = activeTrip ? getDaysRemaining(activeTrip.endDate) : 0;
   const dailyBudget = daysRemaining > 0 ? Math.max(0, currentBalance / daysRemaining) : 0;
-  const projectedDaily = daysRemaining > 0 ? Math.max(0, projectedBalance / daysRemaining) : 0;
 
   if (authLoading || !user) {
     return <LoadingScreen message="Conectando..." />;
@@ -131,46 +130,35 @@ const HomeScreen = ({ navigation }) => {
       {/* Banking Header */}
       <Surface style={styles.headerSurface}>
         <View style={styles.headerContent}>
+          <Text style={styles.welcomeText}>Bem-vindo</Text>
+          <Text style={styles.userName}>{user?.displayName || 'Viajante'}</Text>
+          
           {activeTrip ? (
             <>
               <Text style={styles.tripName}>{activeTrip.name}</Text>
-              
-              {/* Compact Balance Cards */}
-              <View style={styles.compactBalanceRow}>
-                <View style={styles.compactBalanceCard}>
-                  <Text style={styles.compactBalanceLabel}>Saldo Atual</Text>
-                  <Text style={[styles.compactBalanceValue, { color: colors.backgroundSecondary }]}>
-                    {formatCurrencyValue(currentBalance, activeTrip.defaultCurrency || 'USD')}
-                  </Text>
-                </View>
-                <View style={styles.compactBalanceCard}>
-                  <Text style={styles.compactBalanceLabel}>Projetado</Text>
-                  <Text style={styles.compactBalanceValue}>
-                    {formatCurrencyValue(projectedBalance, activeTrip.defaultCurrency || 'USD')}
-                  </Text>
-                </View>
+              <View style={styles.mainBalanceRow}>
+                <BalanceCard
+                  title="Saldo Atual"
+                  balance={formatCurrencyValue(currentBalance, activeTrip.defaultCurrency || 'USD')}
+                  type={currentBalance >= 0 ? "success" : "error"}
+                  style={styles.mainBalanceCard}
+                />
+                <BalanceCard
+                  title="Projetado"
+                  balance={formatCurrencyValue(projectedBalance, activeTrip.defaultCurrency || 'USD')}
+                  type="secondary"
+                  style={styles.mainBalanceCard}
+                />
               </View>
               
-              {/* Daily Budget Info */}
               {daysRemaining > 0 && (
-                <View style={styles.dailyInfoRow}>
-                  <View style={styles.dailyInfoCard}>
-                    <Text style={styles.dailyInfoLabel}>Por Dia (Real)</Text>
-                    <Text style={styles.dailyInfoValue}>
-                      {formatCurrencyValue(dailyBudget, activeTrip.defaultCurrency || 'USD')}
-                    </Text>
-                  </View>
-                  <View style={styles.dailyInfoCard}>
-                    <Text style={styles.dailyInfoLabel}>Por Dia (Projetado)</Text>
-                    <Text style={styles.dailyInfoValue}>
-                      {formatCurrencyValue(projectedDaily, activeTrip.defaultCurrency || 'USD')}
-                    </Text>
-                  </View>
+                <View style={styles.dailyBudgetContainer}>
+                  <Text style={styles.dailyBudgetLabel}>Disponível por dia</Text>
+                  <Text style={styles.dailyBudgetValue}>
+                    {formatCurrencyValue(dailyBudget, activeTrip.defaultCurrency || 'USD')}
+                  </Text>
+                  <Text style={styles.daysRemainingText}>{daysRemaining} dias restantes</Text>
                 </View>
-              )}
-              
-              {daysRemaining > 0 && (
-                <Text style={styles.daysRemainingText}>{daysRemaining} dias restantes</Text>
               )}
             </>
           ) : (
@@ -242,7 +230,7 @@ const HomeScreen = ({ navigation }) => {
             <QuickActionButton
               icon="○"
               title="Medicamentos"
-              onPress={() => navigation.navigate('MedicationList')}
+              onPress={() => navigation.navigate('Medications')}
               color={colors.warning}
             />
             <QuickActionButton
@@ -265,7 +253,7 @@ const HomeScreen = ({ navigation }) => {
             <View style={styles.medicationActions}>
               <Button
                 mode="contained"
-                onPress={() => navigation.navigate('MedicationList')}
+                onPress={() => navigation.navigate('Medications')}
                 style={styles.medicationButton}
                 buttonColor={colors.warning}
               >
@@ -288,6 +276,29 @@ const HomeScreen = ({ navigation }) => {
             </View>
           </CardContainer>
         )}
+
+        {/* Navigation Actions */}
+        <CardContainer style={styles.navigationCard}>
+          <SectionHeader title="Navegar" />
+          <View style={styles.navigationButtons}>
+            <Button
+              mode="outlined"
+              onPress={() => navigation.navigate('TripList')}
+              style={styles.navButton}
+              contentStyle={styles.navButtonContent}
+            >
+              Minhas Viagens
+            </Button>
+            <Button
+              mode="outlined"
+              onPress={() => activeTrip ? navigation.navigate('DailySpending', { tripId: activeTrip.id }) : navigation.navigate('TripList')}
+              style={styles.navButton}
+              contentStyle={styles.navButtonContent}
+            >
+              Gráficos
+            </Button>
+          </View>
+        </CardContainer>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -313,8 +324,8 @@ const styles = StyleSheet.create({
   // Header Banking Style
   headerSurface: {
     backgroundColor: colors.primary,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
     paddingHorizontal: spacing.lg,
     borderBottomLeftRadius: borderRadius.xl,
     borderBottomRightRadius: borderRadius.xl,
@@ -323,86 +334,64 @@ const styles = StyleSheet.create({
   headerContent: {
     alignItems: 'center',
   },
-  tripName: {
-    fontSize: 20,
-    fontFamily: 'Inter-SemiBold',
+  welcomeText: {
+    ...typography.labelLarge,
     color: colors.backgroundSecondary,
-    fontWeight: '600',
+    opacity: 0.9,
+  },
+  userName: {
+    ...typography.headlineLarge,
+    color: colors.backgroundSecondary,
+    fontWeight: '700',
     marginBottom: spacing.md,
+  },
+  tripName: {
+    ...typography.titleLarge,
+    color: colors.backgroundSecondary,
+    opacity: 0.95,
+    marginBottom: spacing.lg,
     textAlign: 'center',
   },
-  
-  // Compact Balance Cards
-  compactBalanceRow: {
+  mainBalanceRow: {
     flexDirection: 'row',
     gap: spacing.md,
     width: '100%',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
-  compactBalanceCard: {
+  mainBalanceCard: {
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
   },
-  compactBalanceLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
+  dailyBudgetContainer: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+  },
+  dailyBudgetLabel: {
+    ...typography.bodyMedium,
     color: colors.backgroundSecondary,
     opacity: 0.8,
-    marginBottom: 2,
   },
-  compactBalanceValue: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
+  dailyBudgetValue: {
+    ...typography.headlineMedium,
     color: colors.backgroundSecondary,
     fontWeight: '600',
-  },
-  
-  // Daily Info Cards
-  dailyInfoRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    width: '100%',
-    marginBottom: spacing.sm,
-  },
-  dailyInfoCard: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.sm,
-    alignItems: 'center',
-  },
-  dailyInfoLabel: {
-    fontSize: 10,
-    fontFamily: 'Inter-Regular',
-    color: colors.backgroundSecondary,
-    opacity: 0.7,
-    marginBottom: 1,
-  },
-  dailyInfoValue: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: colors.backgroundSecondary,
-    fontWeight: '500',
+    marginVertical: spacing.xs,
   },
   daysRemainingText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
+    ...typography.bodySmall,
     color: colors.backgroundSecondary,
     opacity: 0.7,
-    marginTop: spacing.xs,
   },
   noTripContainer: {
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
   },
   noTripText: {
-    fontSize: 18,
-    fontFamily: 'Inter-Medium',
+    ...typography.titleLarge,
     color: colors.backgroundSecondary,
     marginBottom: spacing.md,
   },
@@ -453,8 +442,7 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.warning,
   },
   medicationCount: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    ...typography.bodyLarge,
     color: colors.onSurfaceVariant,
     marginBottom: spacing.md,
   },
@@ -479,21 +467,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statusCount: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: colors.onSurface,
+    ...typography.headlineMedium,
+    color: colors.success,
     fontWeight: '600',
   },
   statusLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
+    ...typography.bodyMedium,
     color: colors.onSurfaceVariant,
   },
   statusOk: {
-    fontSize: 16,
-    fontFamily: 'Inter-Medium',
-    color: colors.onSurface,
+    ...typography.titleMedium,
+    color: colors.success,
     fontWeight: '500',
+  },
+  
+  // Navigation Card
+  navigationCard: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  navigationButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  navButton: {
+    flex: 1,
+    borderColor: colors.outline,
+  },
+  navButtonContent: {
+    paddingVertical: spacing.sm,
   },
   
   // Bottom Spacing

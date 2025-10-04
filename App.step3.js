@@ -1,14 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PaperProvider } from 'react-native-paper';
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>NomadGuide Test App</Text>
-      <Text style={styles.subtext}>If you see this, the basic setup is working!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <SafeAreaProvider>
+      <PaperProvider>
+        <View style={styles.container}>
+          <Text style={styles.text}>NomadGuide - Step 3</Text>
+          <Text style={styles.subtext}>Testing React Native Paper</Text>
+          <StatusBar style="auto" />
+        </View>
+      </PaperProvider>
+    </SafeAreaProvider>
   );
 }
 
